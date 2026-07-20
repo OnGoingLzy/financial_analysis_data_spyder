@@ -1,0 +1,51 @@
+/* Hallmark · macrostructure: Workbench · tone: technical-austere · anchor hue: cyan · theme: Terminal · nav: N3 · footer: Ft4 */
+/* Hallmark · pre-emit critique: P5 H5 E4 S5 R5 V4 */
+/* Hallmark · contrast: pass (40–41) · nav: N3 · footer: Ft4 · slop: pass (42–49) · mobile: basic pass (34, 49–57) */
+:root {
+  --color-paper: oklch(15% 0.014 238);
+  --color-paper-raised: oklch(18% 0.017 238);
+  --color-paper-overlay: oklch(21% 0.019 238);
+  --color-ink: oklch(94% 0.012 220);
+  --color-ink-muted: oklch(70% 0.018 225);
+  --color-ink-faint: oklch(54% 0.018 225);
+  --color-accent: oklch(79% 0.12 205);
+  --color-accent-strong: oklch(86% 0.13 199);
+  --color-accent-wash: oklch(79% 0.12 205 / 0.1);
+  --color-rule: oklch(35% 0.022 228);
+  --color-rule-strong: oklch(47% 0.03 225);
+  --color-profit: oklch(68% 0.2 28);
+  --color-profit-wash: oklch(68% 0.2 28 / 0.1);
+  --color-loss: oklch(72% 0.15 151);
+  --color-loss-wash: oklch(72% 0.15 151 / 0.1);
+  --color-warning: oklch(79% 0.15 78);
+  --color-neutral: oklch(63% 0.012 225);
+  --color-focus: oklch(85% 0.14 202);
+  --color-shadow: oklch(5% 0.01 230 / 0.32);
+  --font-display: "Bahnschrift", "Microsoft YaHei UI", sans-serif;
+  --font-body: "Microsoft YaHei UI", "Microsoft YaHei", sans-serif;
+  --font-data: "JetBrains Mono", "Cascadia Mono", "SFMono-Regular", monospace;
+  --space-2xs: 0.25rem;
+  --space-xs: 0.5rem;
+  --space-sm: 0.75rem;
+  --space-md: 1rem;
+  --space-lg: 1.5rem;
+  --space-xl: 2rem;
+  --space-2xl: 3rem;
+  --text-xs: 0.6875rem;
+  --text-sm: 0.8125rem;
+  --text-md: 0.9375rem;
+  --text-lg: 1.125rem;
+  --text-xl: 1.5rem;
+  --text-2xl: 2rem;
+  --ease-out: cubic-bezier(0.16, 1, 0.3, 1);
+  --ease-in: cubic-bezier(0.7, 0, 0.84, 0);
+  --ease-in-out: cubic-bezier(0.65, 0, 0.35, 1);
+  --dur-fast: 100ms;
+  --dur-base: 180ms;
+  --dur-slow: 280ms;
+  --rule-thin: 1px;
+  --rule-strong: 2px;
+  --radius-sm: 0.25rem;
+  --radius-md: 0.5rem;
+  --radius-lg: 0.75rem;
+}

@@ -1,0 +1,6 @@
+export interface Meta { databasePath: string; modifiedAt: string; companyCount: number; periodStart: string; periodEnd: string; incomeStatementCount: number; balanceSheetCount: number; qualityIssueCount: number }
+export interface Company { code: string; name: string; market: string; industryName: string | null; latestPeriod?: string }
+export interface MetricDatum { value: number | null; rawValue?: number | null; percentile?: number | null }
+export interface CompareRow extends Company { metrics: Record<string, MetricDatum> }
+export interface CompareResponse { commonPeriod: string; mode: string; sampleSize: number; medians: Record<string, number | null>; rows: CompareRow[] }
+export interface AnalysisRecord { reportPeriod: string; reportType: string; revenue: number | null; grossProfit: number | null; grossMargin: number | null; netProfit: number | null; netProfitToParent: number | null; revenueYoyGrowth: number | null; financialExpenses: number | null; salesExpenses: number | null; managementExpenses: number | null; researchExpenses: number | null; operatingProfit: number | null; ratios: Record<string, number | null> | null; balance: Record<string, number | null> | null }

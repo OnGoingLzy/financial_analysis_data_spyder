@@ -9,6 +9,13 @@ from utils import generate_custom_id
 from selenium.common.exceptions import TimeoutException, NoSuchElementException
 
 
+INCOME_ROW_LABELS = {
+    "total_operating_income": "营业总收入",
+    "total_operating_cost": "营业总成本",
+    "operating_cost": "营业成本",
+}
+
+
 def getdata(driver, code):
     try:
         driver.get(
@@ -51,16 +58,16 @@ def getlrb(lrb, driver, name, code):
         date = lrb.find_element(By.CLASS_NAME, 'tableHeaderFix').find_elements(By.TAG_NAME, 'th')[i + 1].text
 
         #
-        yyzsr_span_element = lrb.find_element(By.XPATH, "//span[text()='营业总收入']")
+        yyzsr_span_element = lrb.find_element(By.XPATH, f"//span[text()='{INCOME_ROW_LABELS['total_operating_income']}']")
         yyzsr_element = yyzsr_span_element.find_element(By.XPATH, "./ancestor::td/ancestor::tr")
         yyzsr = yyzsr_element.find_elements(By.TAG_NAME, 'td')[i + 1].text
         # 营业总成本
-        yysr_span_element = lrb.find_element(By.XPATH, "//span[text()='营业总成本']")
+        yysr_span_element = lrb.find_element(By.XPATH, f"//span[text()='{INCOME_ROW_LABELS['total_operating_cost']}']")
         yysr_element = yysr_span_element.find_element(By.XPATH, "./ancestor::td/ancestor::tr")
         yysr = yysr_element.find_elements(By.TAG_NAME, 'td')[i + 1].text
 
         # 营业成本
-        yycb_span_element = lrb.find_element(By.XPATH, "//span[text()='营业总成本']")
+        yycb_span_element = lrb.find_element(By.XPATH, f"//span[text()='{INCOME_ROW_LABELS['operating_cost']}']")
         yycb_element = yycb_span_element.find_element(By.XPATH, "./ancestor::td/ancestor::tr")
         yycb = yycb_element.find_elements(By.TAG_NAME, 'td')[i + 1].text
 
