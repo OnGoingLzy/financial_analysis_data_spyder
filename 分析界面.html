@@ -1,0 +1,389 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>商业利润分析 - 财务决策支持系统</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <script src="https://cdn.jsdelivr.net/npm/vue@3.3.4/dist/vue.global.prod.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/echarts@5.4.3/dist/echarts.min.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/sql.js/1.8.0/sql-wasm.js"></script>
+    <style>
+        @import url('https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&display=swap');
+        body { font-family: 'Inter', 'Microsoft YaHei', sans-serif; background-color: #f8fafc; }
+        .glass-card { background: rgba(255, 255, 255, 0.9); backdrop-filter: blur(10px); border: 1px solid rgba(226, 232, 240, 0.8); }
+        .chart-container { min-height: 400px; width: 100%; }
+        [v-cloak] { display: none; }
+    </style>
+</head>
+<body class="text-slate-800">
+
+    <div id="app" v-cloak>
+        <!-- 顶部导航 -->
+        <nav class="sticky top-0 z-50 bg-white border-b border-slate-200 px-6 py-4 flex justify-between items-center shadow-sm">
+            <div class="flex items-center space-x-3">
+                <div class="bg-indigo-600 p-2 rounded-lg">
+                    <svg xmlns="http://www.w3.org/2000/svg" class="h-6 w-6 text-white" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 19v-6a2 2 0 00-2-2H5a2 2 0 00-2 2v6a2 2 0 002 2h2a2 2 0 002-2zm0 0V9a2 2 0 012-2h2a2 2 0 012 2v10m-6 0a2 2 0 002 2h2a2 2 0 002-2m0 0V5a2 2 0 012-2h2a2 2 0 012 2v14a2 2 0 01-2 2h-2a2 2 0 01-2-2z" />
+                    </svg>
+                </div>
+                <h1 class="text-xl font-bold tracking-tight text-slate-900">商业利润分析平台 <span class="text-xs font-normal text-slate-400 ml-2">Vue Engine V2.1</span></h1>
+            </div>
+
+            <div class="flex items-center space-x-4">
+                <div :class="dbConnected ? 'text-emerald-600 bg-emerald-50' : 'text-amber-600 bg-amber-50'" class="flex items-center text-sm font-medium px-3 py-1.5 rounded-full transition-all">
+                    <span :class="dbConnected ? 'bg-emerald-500' : 'bg-amber-500 animate-pulse'" class="h-2.5 w-2.5 rounded-full mr-2"></span>
+                    {{ dbStatusText }}
+                </div>
+                <label class="cursor-pointer bg-indigo-600 hover:bg-indigo-700 text-white px-4 py-2 rounded-md text-sm font-medium transition flex items-center">
+                    <svg xmlns="http://www.w3.org/2000/svg" class="h-4 w-4 mr-2" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-8l-4-4m0 0L8 8m4-4v12" />
+                    </svg>
+                    加载数据库
+                    <input type="file" @change="handleFileUpload" class="hidden" accept=".db,.sqlite,.sqlite3">
+                </label>
+            </div>
+        </nav>
+
+        <main class="max-w-7xl mx-auto p-6 space-y-6">
+            
+            <!-- 筛选栏 -->
+            <div class="glass-card p-4 rounded-xl flex flex-wrap items-end gap-4">
+                <div class="flex flex-col">
+                    <label class="text-xs font-bold text-slate-500 mb-1">企业筛选</label>
+                    <select v-model="filters.company" class="border border-slate-200 rounded-md px-3 py-2 text-sm focus:ring-2 focus:ring-indigo-500 outline-none min-w-[200px]">
+                        <option value="all">所有企业</option>
+                        <option v-for="c in companyList" :key="c.code" :value="c.code">{{ c.code }} - {{ c.name }}</option>
+                    </select>
+                </div>
+                <div class="flex flex-col">
+                    <label class="text-xs font-bold text-slate-500 mb-1">仅看最新报表</label>
+                    <div class="flex items-center h-[38px]">
+                        <input type="checkbox" v-model="filters.onlyLatest" id="latest-check" class="w-4 h-4 text-indigo-600 border-slate-300 rounded focus:ring-indigo-500">
+                        <label for="latest-check" class="ml-2 text-sm text-slate-600">排除历史旧数据</label>
+                    </div>
+                </div>
+                <div class="ml-auto text-xs text-slate-400 italic pb-2">
+                    * 数据源：优先使用数据库内原始数值。如原始数值异常，将通过 (营收-成本)/营收 自动推算。
+                </div>
+            </div>
+
+            <!-- KPI 卡片区 -->
+            <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
+                <div v-for="kpi in kpis" :key="kpi.label" class="glass-card p-6 rounded-xl border-l-4" :style="{ borderColor: kpi.color }">
+                    <p class="text-xs font-bold text-slate-500 uppercase tracking-wider">{{ kpi.label }}</p>
+                    <h3 class="text-2xl font-bold mt-1">{{ kpi.value }}</h3>
+                    <div class="mt-2 text-xs font-medium" :style="{ color: kpi.color }">{{ kpi.sub }}</div>
+                </div>
+            </div>
+
+            <!-- 图表展示区 -->
+            <div class="grid grid-cols-1 lg:grid-cols-2 gap-6">
+                <div class="glass-card p-6 rounded-xl">
+                    <h4 class="text-lg font-bold mb-6 flex items-center">
+                        <span class="w-1.5 h-6 bg-indigo-500 rounded-full mr-3"></span>
+                        最新财报：收入与利润对比 (亿元)
+                    </h4>
+                    <div id="trendChart" class="chart-container"></div>
+                </div>
+                <div class="glass-card p-6 rounded-xl">
+                    <h4 class="text-lg font-bold mb-6 flex items-center">
+                        <span class="w-1.5 h-6 bg-indigo-500 rounded-full mr-3"></span>
+                        三费及研发结构分析 (最新记录)
+                    </h4>
+                    <div id="pieChart" class="chart-container"></div>
+                </div>
+            </div>
+
+            <!-- 数据详情表 -->
+            <div class="glass-card rounded-xl overflow-hidden">
+                <div class="p-6 border-b border-slate-100 flex justify-between items-center bg-slate-50/50">
+                    <h4 class="text-lg font-bold">财务报表穿透查询</h4>
+                    <div class="flex items-center gap-4">
+                        <span class="text-xs text-slate-400">共 {{ filteredTableData.length }} 条记录</span>
+                        <input type="text" v-model="filters.search" placeholder="搜索名称或代码..." class="px-4 py-2 border border-slate-200 rounded-lg text-sm focus:ring-2 focus:ring-indigo-500 outline-none w-64">
+                    </div>
+                </div>
+                <div class="overflow-x-auto">
+                    <table class="w-full text-left border-collapse">
+                        <thead>
+                            <tr class="bg-slate-50 text-slate-500 uppercase text-xs font-bold">
+                                <th class="px-6 py-4 border-b">股票代码</th>
+                                <th class="px-6 py-4 border-b">企业名称</th>
+                                <th class="px-6 py-4 border-b text-right">营业收入</th>
+                                <th class="px-6 py-4 border-b text-right">净利润</th>
+                                <th class="px-6 py-4 border-b text-right">毛利率</th>
+                                <th class="px-6 py-4 border-b text-right">研发费用</th>
+                                <th class="px-6 py-4 border-b text-right">披露日期</th>
+                                <th class="px-6 py-4 border-b">状态</th>
+                            </tr>
+                        </thead>
+                        <tbody class="divide-y divide-slate-100 text-sm">
+                            <tr v-for="row in filteredTableData" :key="row.id || row.code + row.disclosure_date" class="hover:bg-slate-50 transition">
+                                <td class="px-6 py-4 font-mono text-indigo-600">{{ row.code }}</td>
+                                <td class="px-6 py-4 font-semibold">{{ row.name }}</td>
+                                <td class="px-6 py-4 text-right">¥{{ formatVal(row.total_operating_income) }}</td>
+                                <td class="px-6 py-4 text-right font-medium" :class="row.net_profit >= 0 ? 'text-emerald-600' : 'text-rose-600'">
+                                    ¥{{ formatVal(row.net_profit) }}
+                                </td>
+                                <td class="px-6 py-4 text-right font-medium text-slate-700">
+                                    {{ (calculateMargin(row) * 100).toFixed(2) }}%
+                                </td>
+                                <td class="px-6 py-4 text-right text-slate-500">¥{{ formatVal(row.RandD_expenses) }}</td>
+                                <td class="px-6 py-4 text-right font-mono">{{ row.disclosure_date }}</td>
+                                <td class="px-6 py-4">
+                                    <span v-if="isLatest(row)" class="px-2 py-0.5 bg-indigo-100 text-indigo-600 text-[10px] font-bold rounded">最新</span>
+                                    <span v-else class="px-2 py-0.5 bg-slate-100 text-slate-400 text-[10px] rounded">历史</span>
+                                </td>
+                            </tr>
+                        </tbody>
+                    </table>
+                </div>
+            </div>
+        </main>
+    </div>
+
+    <script>
+        const { createApp, ref, reactive, computed, onMounted, watch, nextTick } = Vue;
+
+        createApp({
+            setup() {
+                const dbConnected = ref(false);
+                const dbStatusText = ref('使用演示数据 (鹭燕医药)');
+                const allRawData = ref([]);
+                const filters = reactive({
+                    company: 'all',
+                    onlyLatest: false,
+                    search: ''
+                });
+
+                let trendChart = null;
+                let pieChart = null;
+
+                // 核心解析器：处理财务数值、百分比、日期
+                const parseFinancial = (val, colName) => {
+                    if (['disclosure_date', 'code', 'name', 'insert_batch'].includes(colName)) return val;
+                    if (val === null || val === undefined || val === '') return 0;
+                    if (typeof val === 'number') return val;
+                    
+                    let str = String(val).replace(/,/g, '').trim();
+                    let multiplier = 1;
+
+                    // 特殊处理百分比 (针对 gross_profit_margin)
+                    if (str.endsWith('%')) {
+                        str = str.slice(0, -1);
+                        multiplier = 0.01;
+                    }
+
+                    if (str.endsWith('亿')) { multiplier = 100000000; str = str.slice(0, -1); }
+                    else if (str.endsWith('万')) { multiplier = 10000; str = str.slice(0, -1); }
+                    
+                    let num = parseFloat(str);
+                    return isNaN(num) ? 0 : num * multiplier;
+                };
+
+                const formatVal = (val) => {
+                    const abs = Math.abs(val || 0);
+                    if (abs >= 100000000) return (val / 100000000).toFixed(2) + '亿';
+                    if (abs >= 10000) return (val / 10000).toFixed(2) + '万';
+                    return (val || 0).toFixed(2);
+                };
+
+                // 核心计算逻辑：修复 NaN
+                const calculateMargin = (row) => {
+                    // 1. 如果数据库字段 gross_profit_margin 有值（哪怕是 0）
+                    if (row.gross_profit_margin !== undefined && row.gross_profit_margin !== null && row.gross_profit_margin !== '') {
+                        let val = parseFloat(row.gross_profit_margin);
+                        if (!isNaN(val)) {
+                            // 逻辑判断：如果数据库里存的是 6.02，且用户说明即 6.02%，
+                            // 我们约定：如果值大于 1 (比如 6.02)，则除以 100；否则认为是已转换的小数 (如 0.0602)
+                            return val > 1 ? val / 100 : val;
+                        }
+                    }
+                    
+                    // 2. 如果字段缺失，尝试使用公式推导
+                    if (row.total_operating_income && row.total_operating_income !== 0) {
+                        const costs = row.operating_costs || 0;
+                        return (row.total_operating_income - costs) / row.total_operating_income;
+                    }
+                    
+                    return 0; // 默认返回 0
+                };
+
+                const latestRecordsMap = computed(() => {
+                    const map = new Map();
+                    allRawData.value.forEach(item => {
+                        const existing = map.get(item.code);
+                        if (!existing || item.disclosure_date > existing.disclosure_date) {
+                            map.set(item.code, item);
+                        }
+                    });
+                    return map;
+                });
+
+                const isLatest = (row) => {
+                    const latest = latestRecordsMap.value.get(row.code);
+                    return latest && latest.disclosure_date === row.disclosure_date;
+                };
+
+                const companyList = computed(() => {
+                    const seen = new Set();
+                    return allRawData.value.filter(d => {
+                        const duplicate = seen.has(d.code);
+                        seen.add(d.code);
+                        return !duplicate;
+                    }).map(d => ({ code: d.code, name: d.name }));
+                });
+
+                const filteredTableData = computed(() => {
+                    let data = allRawData.value;
+                    if (filters.company !== 'all') data = data.filter(d => d.code === filters.company);
+                    if (filters.onlyLatest) data = data.filter(d => isLatest(d));
+                    if (filters.search) {
+                        const s = filters.search.toLowerCase();
+                        data = data.filter(d => (d.name || "").toLowerCase().includes(s) || (d.code || "").toLowerCase().includes(s));
+                    }
+                    return [...data].sort((a, b) => (b.disclosure_date || "").localeCompare(a.disclosure_date || ""));
+                });
+
+                const kpis = computed(() => {
+                    const activeRecords = Array.from(latestRecordsMap.value.values())
+                                            .filter(d => filters.company === 'all' || d.code === filters.company);
+                    
+                    const totalIncome = activeRecords.reduce((s, d) => s + (d.total_operating_income || 0), 0);
+                    const totalProfit = activeRecords.reduce((s, d) => s + (d.net_profit || 0), 0);
+                    const totalAssets = activeRecords.reduce((s, d) => s + (d.total_assets || 0), 0);
+                    const totalLiab = activeRecords.reduce((s, d) => s + (d.total_liabilities || 0), 0);
+                    
+                    const avgMargin = activeRecords.length ? (activeRecords.reduce((s, d) => s + calculateMargin(d), 0) / activeRecords.length) : 0;
+                    const debtRatio = totalAssets > 0 ? (totalLiab / totalAssets) : 0;
+
+                    return [
+                        { label: '累计营业总收入', value: `¥${formatVal(totalIncome)}`, sub: '核心收入规模', color: '#6366f1' },
+                        { label: '累计净利润', value: `¥${formatVal(totalProfit)}`, sub: `平均净利率: ${totalIncome ? (totalProfit/totalIncome*100).toFixed(2) : 0}%`, color: '#10b981' },
+                        { label: '平均毛利率', value: `${(avgMargin * 100).toFixed(2)}%`, sub: '经营盈利能力', color: '#f59e0b' },
+                        { label: '平均资产负债率', value: `${(debtRatio * 100).toFixed(2)}%`, sub: `总资产: ¥${formatVal(totalAssets)}`, color: '#f43f5e' }
+                    ];
+                });
+
+                const initCharts = () => {
+                    const trendDom = document.getElementById('trendChart');
+                    const pieDom = document.getElementById('pieChart');
+                    if (trendDom) trendChart = echarts.init(trendDom);
+                    if (pieDom) pieChart = echarts.init(pieDom);
+                    
+                    window.addEventListener('resize', () => {
+                        if (trendChart) trendChart.resize();
+                        if (pieChart) pieChart.resize();
+                    });
+                };
+
+                const updateCharts = () => {
+                    if (!trendChart || !pieChart) return;
+
+                    const activeRecords = Array.from(latestRecordsMap.value.values())
+                                            .filter(d => filters.company === 'all' || d.code === filters.company);
+
+                    trendChart.setOption({
+                        tooltip: { trigger: 'axis' },
+                        legend: { bottom: 0 },
+                        grid: { top: 40, bottom: 60, left: 80, right: 30 },
+                        xAxis: { type: 'category', data: activeRecords.map(d => d.name), axisLabel: { interval: 0, rotate: 15 } },
+                        yAxis: { type: 'value', name: '亿元', axisLabel: { formatter: v => (v / 100000000).toFixed(0) } },
+                        series: [
+                            { name: '收入', type: 'bar', data: activeRecords.map(d => d.total_operating_income), itemStyle: { color: '#6366f1' }, barMaxWidth: 30 },
+                            { name: '净利润', type: 'bar', data: activeRecords.map(d => d.net_profit), itemStyle: { color: '#10b981' }, barMaxWidth: 30 }
+                        ]
+                    });
+
+                    const s = activeRecords.reduce((acc, d) => {
+                        acc.sale += (d.sales_expenses || 0);
+                        acc.mgmt += (d.management_expenses || 0);
+                        acc.fin += (d.financial_expenses || 0);
+                        acc.rd += (d.RandD_expenses || 0);
+                        return acc;
+                    }, { sale: 0, mgmt: 0, fin: 0, rd: 0 });
+
+                    pieChart.setOption({
+                        tooltip: { trigger: 'item', formatter: '{b}: {c} ({d}%)' },
+                        legend: { orient: 'vertical', left: 'left', top: 'center' },
+                        series: [{
+                            type: 'pie', radius: ['40%', '70%'],
+                            center: ['60%', '50%'],
+                            itemStyle: { borderRadius: 8, borderColor: '#fff', borderWidth: 2 },
+                            data: [
+                                { value: s.sale, name: '销售费用', itemStyle: { color: '#fb923c' } },
+                                { value: s.mgmt, name: '管理费用', itemStyle: { color: '#38bdf8' } },
+                                { value: Math.max(0, s.fin), name: '财务费用', itemStyle: { color: '#818cf8' } },
+                                { value: s.rd, name: '研发费用', itemStyle: { color: '#f43f5e' } }
+                            ]
+                        }]
+                    });
+                };
+
+                const handleFileUpload = async (e) => {
+                    const file = e.target.files[0];
+                    if (!file) return;
+
+                    const SQL = await initSqlJs({ locateFile: f => `https://cdnjs.cloudflare.com/ajax/libs/sql.js/1.8.0/sql-wasm.wasm` });
+                    const reader = new FileReader();
+                    reader.onload = function() {
+                        try {
+                            const dbInstance = new SQL.Database(new Uint8Array(reader.result));
+                            const res = dbInstance.exec(`
+                                SELECT p.*, b.total_assets, b.total_liabilities 
+                                FROM "利润表temp" p 
+                                LEFT JOIN "资产负债表temp" b ON p.code = b.code AND p.disclosure_date = b.disclosure_date
+                            `);
+                            
+                            if (res.length > 0) {
+                                const cols = res[0].columns;
+                                allRawData.value = res[0].values.map(row => {
+                                    let obj = {};
+                                    cols.forEach((c, i) => obj[c] = parseFinancial(row[i], c));
+                                    return obj;
+                                });
+                                dbConnected.value = true;
+                                dbStatusText.value = `已加载: ${file.name}`;
+                            } else {
+                                alert("未在数据库中找到匹配的报表数据。");
+                            }
+                        } catch (err) {
+                            alert("读取失败：请确保数据库中包含 '利润表temp' 和 '资产负债表temp' 表且字段对应。");
+                        }
+                    };
+                    reader.readAsArrayBuffer(file);
+                };
+
+                const loadMock = () => {
+                    const codes = ["SZ002788"];
+                    const dates = ["2025-09-30", "2025-06-30", "2025-03-31", "2024-12-31", "2024-09-30"];
+                    const mock = dates.map((d, i) => ({
+                        code: codes[0], name: "鹭燕医药", disclosure_date: d,
+                        total_operating_income: 21850000000 - (i * 2000000000), 
+                        net_profit: 1103000000 - (i * 100000000),
+                        sales_expenses: 361400000, management_expenses: 250000000, financial_expenses: 139000000, RandD_expenses: 42720000,
+                        gross_profit_margin: 7.02 - (i * 0.1), // 模拟 7.02%
+                        total_assets: 15860000000, total_liabilities: 15550000000
+                    }));
+                    allRawData.value = mock;
+                };
+
+                onMounted(() => {
+                    initCharts();
+                    loadMock();
+                });
+
+                watch([allRawData, filters], () => {
+                    nextTick(() => updateCharts());
+                }, { deep: true });
+
+                return {
+                    dbConnected, dbStatusText, filters, companyList, filteredTableData, kpis,
+                    handleFileUpload, formatVal, calculateMargin, isLatest
+                };
+            }
+        }).mount('#app');
+    </script>
+</body>
+</html>

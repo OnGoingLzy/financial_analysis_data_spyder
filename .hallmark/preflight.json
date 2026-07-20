@@ -1,0 +1,22 @@
+{
+  "scanned_at": "2026-07-20",
+  "project_root": "D:/workbench/python/financial_analysis_data_spyder",
+  "existing_framework": "vanilla-html-with-vue-cdn",
+  "existing_font_stack": ["Inter", "Microsoft YaHei", "sans-serif"],
+  "existing_palette": "slate-indigo",
+  "motion_stance": "motion-cut",
+  "spacing_system": "tailwind-default-4px-scale",
+  "target_surface": "Web Vue 3 application",
+  "preserve": [
+    "财务分析业务语义",
+    "同行对比和单家公司分析主流程",
+    "现有原始数据库表用于数据追溯"
+  ],
+  "introduce": [
+    "Vue 3 工程化结构",
+    "标准化数据库表",
+    "研究终端视觉系统",
+    "响应式与无障碍规范",
+    "自动化测试"
+  ]
+}

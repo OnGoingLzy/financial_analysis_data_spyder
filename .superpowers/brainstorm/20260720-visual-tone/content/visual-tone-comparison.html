@@ -1,0 +1,498 @@
+<style>
+  #visual-tone-comparison {
+    --profit: oklch(55% 0.2 25);
+    --loss: oklch(56% 0.16 150);
+    --neutral: oklch(60% 0.02 255);
+    color: var(--foreground);
+  }
+
+  #visual-tone-comparison .tone-grid {
+    display: grid;
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    gap: 20px;
+    margin-top: 20px;
+  }
+
+  #visual-tone-comparison .tone-card {
+    display: grid;
+    gap: 12px;
+    width: 100%;
+    min-width: 0;
+    padding: 0;
+    overflow: clip;
+    border: 1px solid var(--border);
+    border-radius: 12px;
+    background: transparent;
+    color: inherit;
+    text-align: left;
+    cursor: pointer;
+  }
+
+  #visual-tone-comparison .tone-card:focus-visible {
+    outline: 3px solid var(--ring);
+    outline-offset: 3px;
+  }
+
+  #visual-tone-comparison .tone-card.is-selected {
+    outline: 3px solid var(--primary);
+    outline-offset: 3px;
+  }
+
+  #visual-tone-comparison .mock-shell {
+    min-height: 510px;
+    overflow: clip;
+    font-family: var(--mock-font);
+    background: var(--mock-paper);
+    color: var(--mock-ink);
+  }
+
+  #visual-tone-comparison .mock-topbar {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 12px;
+    min-height: 48px;
+    padding: 0 16px;
+    border-bottom: 1px solid var(--mock-rule);
+  }
+
+  #visual-tone-comparison .brand {
+    font-weight: 700;
+    letter-spacing: -0.02em;
+  }
+
+  #visual-tone-comparison .period {
+    color: var(--mock-muted);
+    font-size: 11px;
+  }
+
+  #visual-tone-comparison .terminal-layout {
+    display: grid;
+    grid-template-columns: 112px minmax(0, 1fr);
+    min-height: 462px;
+  }
+
+  #visual-tone-comparison .mock-rail {
+    display: grid;
+    align-content: start;
+    gap: 6px;
+    padding: 12px 8px;
+    border-right: 1px solid var(--mock-rule);
+  }
+
+  #visual-tone-comparison .rail-item {
+    padding: 9px 10px;
+    border-radius: 6px;
+    color: var(--mock-muted);
+    font-size: 11px;
+    font-weight: 600;
+  }
+
+  #visual-tone-comparison .rail-item.active {
+    background: var(--mock-accent-soft);
+    color: var(--mock-accent);
+  }
+
+  #visual-tone-comparison .terminal-main,
+  #visual-tone-comparison .platform-main {
+    min-width: 0;
+    padding: 14px;
+  }
+
+  #visual-tone-comparison .terminal-heading,
+  #visual-tone-comparison .platform-heading {
+    display: flex;
+    align-items: end;
+    justify-content: space-between;
+    gap: 12px;
+    margin-bottom: 12px;
+  }
+
+  #visual-tone-comparison .terminal-heading strong,
+  #visual-tone-comparison .platform-heading strong {
+    display: block;
+    font-size: 18px;
+    line-height: 1.2;
+  }
+
+  #visual-tone-comparison .caption {
+    color: var(--mock-muted);
+    font-size: 10px;
+  }
+
+  #visual-tone-comparison .status {
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+    color: var(--mock-muted);
+    font-size: 10px;
+    white-space: nowrap;
+  }
+
+  #visual-tone-comparison .status::before {
+    width: 6px;
+    height: 6px;
+    border-radius: 999px;
+    background: var(--mock-accent);
+    content: "";
+  }
+
+  #visual-tone-comparison .metric-strip {
+    display: grid;
+    grid-template-columns: repeat(3, minmax(0, 1fr));
+    gap: 8px;
+    margin-bottom: 10px;
+  }
+
+  #visual-tone-comparison .metric {
+    min-width: 0;
+    padding: 10px;
+    border: 1px solid var(--mock-rule);
+    border-radius: 7px;
+    background: var(--mock-panel);
+  }
+
+  #visual-tone-comparison .metric small {
+    display: block;
+    margin-bottom: 4px;
+    color: var(--mock-muted);
+    font-size: 9px;
+  }
+
+  #visual-tone-comparison .metric b {
+    font-size: 14px;
+    font-variant-numeric: tabular-nums;
+  }
+
+  #visual-tone-comparison .profit { color: var(--profit); }
+  #visual-tone-comparison .loss { color: var(--loss); }
+
+  #visual-tone-comparison .terminal-grid {
+    display: grid;
+    grid-template-columns: minmax(0, 1.35fr) minmax(150px, 0.65fr);
+    gap: 8px;
+  }
+
+  #visual-tone-comparison .mock-panel {
+    min-width: 0;
+    padding: 10px;
+    border: 1px solid var(--mock-rule);
+    border-radius: 7px;
+    background: var(--mock-panel);
+  }
+
+  #visual-tone-comparison .panel-title {
+    display: flex;
+    justify-content: space-between;
+    gap: 8px;
+    margin-bottom: 10px;
+    font-size: 10px;
+    font-weight: 700;
+  }
+
+  #visual-tone-comparison .bars {
+    display: grid;
+    gap: 8px;
+  }
+
+  #visual-tone-comparison .bar-row {
+    display: grid;
+    grid-template-columns: 54px minmax(0, 1fr) 46px;
+    align-items: center;
+    gap: 6px;
+    color: var(--mock-muted);
+    font-size: 9px;
+  }
+
+  #visual-tone-comparison .bar-track {
+    height: 8px;
+    overflow: clip;
+    border-radius: 2px;
+    background: var(--mock-track);
+  }
+
+  #visual-tone-comparison .bar-fill {
+    height: 100%;
+    border-radius: inherit;
+    background: var(--mock-accent);
+  }
+
+  #visual-tone-comparison .risk-list {
+    display: grid;
+    gap: 8px;
+  }
+
+  #visual-tone-comparison .risk {
+    display: grid;
+    grid-template-columns: minmax(0, 1fr) auto;
+    gap: 8px;
+    padding-bottom: 7px;
+    border-bottom: 1px solid var(--mock-rule);
+    font-size: 9px;
+  }
+
+  #visual-tone-comparison .risk:last-child { border-bottom: 0; }
+
+  #visual-tone-comparison .mock-table {
+    width: 100%;
+    margin-top: 8px;
+    border-collapse: collapse;
+    font-size: 9px;
+    font-variant-numeric: tabular-nums;
+  }
+
+  #visual-tone-comparison .mock-table th,
+  #visual-tone-comparison .mock-table td {
+    padding: 7px 5px;
+    border-bottom: 1px solid var(--mock-rule);
+    white-space: nowrap;
+  }
+
+  #visual-tone-comparison .mock-table th {
+    color: var(--mock-muted);
+    font-weight: 500;
+    text-align: left;
+  }
+
+  #visual-tone-comparison .mock-table td:not(:first-child),
+  #visual-tone-comparison .mock-table th:not(:first-child) { text-align: right; }
+
+  #visual-tone-comparison .platform-nav {
+    display: flex;
+    gap: 16px;
+    color: var(--mock-muted);
+    font-size: 10px;
+  }
+
+  #visual-tone-comparison .platform-nav span:first-child {
+    color: var(--mock-accent);
+    font-weight: 700;
+  }
+
+  #visual-tone-comparison .platform-toolbar {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 6px;
+    margin-bottom: 12px;
+  }
+
+  #visual-tone-comparison .filter-chip {
+    padding: 6px 8px;
+    border: 1px solid var(--mock-rule);
+    border-radius: 999px;
+    background: var(--mock-panel);
+    color: var(--mock-muted);
+    font-size: 9px;
+  }
+
+  #visual-tone-comparison .filter-chip.active {
+    border-color: var(--mock-accent);
+    background: var(--mock-accent-soft);
+    color: var(--mock-accent);
+  }
+
+  #visual-tone-comparison .platform-chart {
+    display: grid;
+    grid-template-columns: minmax(0, 1.2fr) minmax(150px, 0.8fr);
+    gap: 10px;
+    margin-bottom: 10px;
+  }
+
+  #visual-tone-comparison .line-chart {
+    position: relative;
+    min-height: 130px;
+    overflow: clip;
+  }
+
+  #visual-tone-comparison .line-chart::before,
+  #visual-tone-comparison .line-chart::after {
+    position: absolute;
+    right: 0;
+    left: 0;
+    height: 1px;
+    background: var(--mock-rule);
+    content: "";
+  }
+
+  #visual-tone-comparison .line-chart::before { top: 40px; }
+  #visual-tone-comparison .line-chart::after { top: 82px; }
+
+  #visual-tone-comparison .trend-line {
+    position: absolute;
+    right: 10px;
+    bottom: 28px;
+    left: 10px;
+    height: 68px;
+  }
+
+  #visual-tone-comparison .trend-line span {
+    position: absolute;
+    bottom: 0;
+    width: 14%;
+    border-radius: 3px 3px 0 0;
+    background: var(--mock-accent);
+  }
+
+  #visual-tone-comparison .trend-line span:nth-child(1) { left: 4%; height: 54%; }
+  #visual-tone-comparison .trend-line span:nth-child(2) { left: 28%; height: 68%; }
+  #visual-tone-comparison .trend-line span:nth-child(3) { left: 52%; height: 82%; }
+  #visual-tone-comparison .trend-line span:nth-child(4) { left: 76%; height: 100%; }
+
+  #visual-tone-comparison .tone-copy {
+    display: grid;
+    gap: 5px;
+    padding: 0 16px 16px;
+  }
+
+  #visual-tone-comparison .tone-copy strong { font-size: 15px; }
+  #visual-tone-comparison .tone-copy span { color: var(--muted-foreground); font-size: 12px; }
+
+  #visual-tone-comparison .terminal {
+    --mock-font: "Cascadia Mono", "Microsoft YaHei", monospace;
+    --mock-paper: oklch(18% 0.025 255);
+    --mock-panel: oklch(21% 0.025 255);
+    --mock-ink: oklch(93% 0.01 255);
+    --mock-muted: oklch(70% 0.02 255);
+    --mock-rule: oklch(31% 0.025 255);
+    --mock-track: oklch(27% 0.02 255);
+    --mock-accent: oklch(75% 0.12 225);
+    --mock-accent-soft: oklch(28% 0.045 235);
+  }
+
+  #visual-tone-comparison .platform {
+    --mock-font: "IBM Plex Sans", "Microsoft YaHei", sans-serif;
+    --mock-paper: oklch(97% 0.006 245);
+    --mock-panel: oklch(100% 0 0);
+    --mock-ink: oklch(24% 0.025 255);
+    --mock-muted: oklch(52% 0.025 255);
+    --mock-rule: oklch(89% 0.012 245);
+    --mock-track: oklch(93% 0.012 245);
+    --mock-accent: oklch(51% 0.17 255);
+    --mock-accent-soft: oklch(94% 0.035 255);
+  }
+
+  @media (max-width: 900px) {
+    #visual-tone-comparison .tone-grid { grid-template-columns: minmax(0, 1fr); }
+  }
+
+  @media (max-width: 560px) {
+    #visual-tone-comparison .terminal-layout { grid-template-columns: 78px minmax(0, 1fr); }
+    #visual-tone-comparison .terminal-grid,
+    #visual-tone-comparison .platform-chart { grid-template-columns: minmax(0, 1fr); }
+    #visual-tone-comparison .metric-strip { grid-template-columns: minmax(0, 1fr); }
+    #visual-tone-comparison .platform-nav { display: none; }
+  }
+</style>
+
+<div id="visual-tone-comparison">
+  <h2>选择财务分析工作台的视觉基调</h2>
+  <p class="subtitle">两套方案使用相同的真实公司数据与功能层级。点击你更愿意长期使用的一套。</p>
+
+  <div class="tone-grid">
+    <button class="tone-card" type="button" data-choice="research-terminal" onclick="toggleSelect(this)" aria-label="选择专业克制的研究终端风">
+      <div class="mock-shell terminal">
+        <div class="mock-topbar">
+          <div class="brand">财务洞察 / RESEARCH</div>
+          <div class="period">2026 Q1 · 本地数据库已同步</div>
+        </div>
+        <div class="terminal-layout">
+          <aside class="mock-rail">
+            <div class="rail-item active">同行矩阵</div>
+            <div class="rail-item">公司深挖</div>
+            <div class="rail-item">异常雷达</div>
+            <div class="rail-item">口径说明</div>
+          </aside>
+          <main class="terminal-main">
+            <div class="terminal-heading">
+              <div><strong>医药流通同行矩阵</strong><span class="caption">规模、增长、盈利与杠杆集中研判</span></div>
+              <span class="status">24 家 · 7 期</span>
+            </div>
+            <div class="metric-strip">
+              <div class="metric"><small>营收中位数</small><b>54.29 亿</b></div>
+              <div class="metric"><small>盈利公司</small><b class="profit">23 / 24</b></div>
+              <div class="metric"><small>亏损公司</small><b class="loss">1 / 24</b></div>
+            </div>
+            <div class="terminal-grid">
+              <section class="mock-panel">
+                <div class="panel-title"><span>营收规模 / 同比增长</span><span class="caption">单位：亿元</span></div>
+                <div class="bars">
+                  <div class="bar-row"><span>上海医药</span><div class="bar-track"><div class="bar-fill" style="width:100%"></div></div><b>752.6</b></div>
+                  <div class="bar-row"><span>九州通</span><div class="bar-track"><div class="bar-fill" style="width:59%"></div></div><b>447.8</b></div>
+                  <div class="bar-row"><span>重药控股</span><div class="bar-track"><div class="bar-fill" style="width:27%"></div></div><b>204.3</b></div>
+                  <div class="bar-row"><span>华东医药</span><div class="bar-track"><div class="bar-fill" style="width:15%"></div></div><b>111.8</b></div>
+                </div>
+              </section>
+              <section class="mock-panel">
+                <div class="panel-title">分析提示</div>
+                <div class="risk-list">
+                  <div class="risk"><span>浙江震元净利润</span><b class="loss">-0.22 亿</b></div>
+                  <div class="risk"><span>ST 海王营收同比</span><b class="loss">-19.39%</b></div>
+                  <div class="risk"><span>云南白药净利率</span><b class="profit">17.51%</b></div>
+                </div>
+              </section>
+            </div>
+            <table class="mock-table" aria-label="同行关键指标示例">
+              <thead><tr><th>公司</th><th>营收</th><th>同比</th><th>净利润</th><th>毛利率</th></tr></thead>
+              <tbody>
+                <tr><td>上海医药</td><td>752.60</td><td class="profit">+6.36%</td><td class="profit">18.50</td><td>10.75%</td></tr>
+                <tr><td>九州通</td><td>447.80</td><td class="profit">+6.58%</td><td class="profit">5.95</td><td>7.46%</td></tr>
+                <tr><td>浙江震元</td><td>4.41</td><td class="loss">-41.39%</td><td class="loss">-0.22</td><td>22.03%</td></tr>
+              </tbody>
+            </table>
+          </main>
+        </div>
+      </div>
+      <span class="tone-copy"><strong>A · 专业克制的研究终端风</strong><span>深色、高密度、数字优先；适合长时间盯盘式研判和熟练分析人员。</span></span>
+    </button>
+
+    <button class="tone-card" type="button" data-choice="enterprise-platform" onclick="toggleSelect(this)" aria-label="选择清晰明亮的企业数据平台风">
+      <div class="mock-shell platform">
+        <div class="mock-topbar">
+          <div class="brand">财务洞察</div>
+          <nav class="platform-nav"><span>同行对比</span><span>公司分析</span><span>数据质量</span></nav>
+          <div class="period">2026 年一季报</div>
+        </div>
+        <main class="platform-main">
+          <div class="platform-heading">
+            <div><strong>医药流通行业对比</strong><span class="caption">在共同报告期内识别规模差异与经营异常</span></div>
+            <span class="status">数据库已更新</span>
+          </div>
+          <div class="platform-toolbar">
+            <span class="filter-chip active">2026 Q1</span><span class="filter-chip">营收规模</span><span class="filter-chip">盈利质量</span><span class="filter-chip">偿债能力</span>
+          </div>
+          <div class="metric-strip">
+            <div class="metric"><small>样本公司</small><b>24 家</b></div>
+            <div class="metric"><small>盈利公司</small><b class="profit">23 家</b></div>
+            <div class="metric"><small>亏损公司</small><b class="loss">1 家</b></div>
+          </div>
+          <div class="platform-chart">
+            <section class="mock-panel line-chart">
+              <div class="panel-title"><span>行业营收规模</span><span class="caption">共同报告期</span></div>
+              <div class="trend-line" aria-hidden="true"><span></span><span></span><span></span><span></span></div>
+            </section>
+            <section class="mock-panel">
+              <div class="panel-title">重点观察</div>
+              <div class="risk-list">
+                <div class="risk"><span>增长最快</span><b class="profit">漱玉平民 +9.36%</b></div>
+                <div class="risk"><span>营收承压</span><b class="loss">浙江震元 -41.39%</b></div>
+                <div class="risk"><span>毛利率最高</span><b>益丰药房 40.04%</b></div>
+              </div>
+            </section>
+          </div>
+          <section class="mock-panel">
+            <div class="panel-title"><span>公司关键指标</span><span class="caption">点击公司进入单体深挖</span></div>
+            <table class="mock-table" aria-label="同行关键指标示例">
+              <thead><tr><th>公司</th><th>营业收入</th><th>同比</th><th>净利润</th><th>毛利率</th></tr></thead>
+              <tbody>
+                <tr><td>上海医药</td><td>752.60 亿</td><td class="profit">+6.36%</td><td class="profit">18.50 亿</td><td>10.75%</td></tr>
+                <tr><td>九州通</td><td>447.80 亿</td><td class="profit">+6.58%</td><td class="profit">5.95 亿</td><td>7.46%</td></tr>
+                <tr><td>浙江震元</td><td>4.41 亿</td><td class="loss">-41.39%</td><td class="loss">-0.22 亿</td><td>22.03%</td></tr>
+              </tbody>
+            </table>
+          </section>
+        </main>
+      </div>
+      <span class="tone-copy"><strong>B · 清晰明亮的企业数据平台风</strong><span>明亮、层级舒展、解释更充分；适合跨部门协作、汇报和新用户上手。</span></span>
+    </button>
+  </div>
+</div>
