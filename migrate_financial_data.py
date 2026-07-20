@@ -7,7 +7,14 @@ from datetime import datetime
 from pathlib import Path
 from uuid import uuid4
 
-from financial_schema import ensure_normalized_schema, upsert_balance_sheet, upsert_income_statement, utc_now
+from financial_normalization import normalize_report_period, normalize_security_code
+from financial_schema import (
+    ensure_normalized_schema,
+    to_beijing_timestamp,
+    upsert_balance_sheet,
+    upsert_income_statement,
+    beijing_now,
+)
 
 
 @dataclass(frozen=True)
@@ -16,6 +23,13 @@ class MigrationResult:
     income_rows: int
     balance_rows: int
     issue_count: int
+    backup_path: str | None = None
+
+
+@dataclass(frozen=True)
+class MetadataRepairResult:
+    timestamps_updated: int
+    completed_batches: int
     backup_path: str | None = None
 
 
@@ -43,7 +57,7 @@ def migrate_database(database_path: str | Path, backup_path: str | Path | None =
             '''INSERT INTO import_batches
                (batch_id, source_name, started_at, status, raw_row_count, normalized_row_count, issue_count)
                VALUES (?, 'legacy-sqlite-migration', ?, 'running', ?, 0, 0)''',
-            (batch_id, utc_now(), len(income_rows) + len(balance_rows)),
+            (batch_id, beijing_now(), len(income_rows) + len(balance_rows)),
         )
         for row in income_rows:
             upsert_income_statement(connection, row, batch_id)
@@ -58,13 +72,121 @@ def migrate_database(database_path: str | Path, backup_path: str | Path | None =
         connection.execute(
             '''UPDATE import_batches SET completed_at=?, status='completed',
                normalized_row_count=?, issue_count=? WHERE batch_id=?''',
-            (utc_now(), counts["income"] + counts["balance"], counts["issues"], batch_id),
+            (beijing_now(), counts["income"] + counts["balance"], counts["issues"], batch_id),
         )
     return MigrationResult(
         companies=counts["companies"],
         income_rows=counts["income"],
         balance_rows=counts["balance"],
         issue_count=counts["issues"],
+        backup_path=str(resolved_backup) if resolved_backup else None,
+    )
+
+
+def _convert_timestamp_column(connection: sqlite3.Connection, table: str, column: str) -> int:
+    rows = connection.execute(
+        f"SELECT rowid, {column} FROM {table} WHERE {column} IS NOT NULL"
+    ).fetchall()
+    updated = 0
+    for rowid, value in rows:
+        converted = to_beijing_timestamp(value)
+        if converted != value:
+            connection.execute(
+                f"UPDATE {table} SET {column}=? WHERE rowid=?",
+                (converted, rowid),
+            )
+            updated += 1
+    return updated
+
+
+def _count_normalized_rows_for_batch(
+    connection: sqlite3.Connection,
+    batch_id: str,
+    raw_table: str,
+    normalized_table: str,
+) -> tuple[int, int, str | None]:
+    raw_rows = connection.execute(
+        f'''SELECT code, disclosure_date FROM "{raw_table}"
+            WHERE CAST(insert_batch AS TEXT)=?''',
+        (batch_id,),
+    ).fetchall()
+    normalized_keys = set()
+    latest_collected_at = None
+    for raw_code, raw_period in raw_rows:
+        try:
+            code, _ = normalize_security_code(raw_code)
+        except ValueError:
+            continue
+        period = normalize_report_period(raw_period)
+        if not period:
+            continue
+        normalized = connection.execute(
+            f'''SELECT collected_at FROM {normalized_table}
+                WHERE code=? AND report_period=?''',
+            (code, period),
+        ).fetchone()
+        if normalized:
+            normalized_keys.add((code, period))
+            if normalized[0] and (latest_collected_at is None or normalized[0] > latest_collected_at):
+                latest_collected_at = normalized[0]
+    return len(raw_rows), len(normalized_keys), latest_collected_at
+
+
+def repair_database_metadata(
+    database_path: str | Path,
+    backup_path: str | Path | None = None,
+) -> MetadataRepairResult:
+    database_path = Path(database_path).resolve()
+    if not database_path.exists():
+        raise FileNotFoundError(f"未找到数据库：{database_path}")
+    resolved_backup = Path(backup_path).resolve() if backup_path else None
+    if resolved_backup:
+        _create_backup(database_path, resolved_backup)
+
+    timestamp_fields = (
+        ("companies", "updated_at"),
+        ("import_batches", "started_at"),
+        ("import_batches", "completed_at"),
+        ("income_statements", "collected_at"),
+        ("balance_sheets", "collected_at"),
+        ("data_quality_issues", "created_at"),
+    )
+    completed_batches = 0
+    with sqlite3.connect(database_path) as connection:
+        ensure_normalized_schema(connection)
+        timestamps_updated = sum(
+            _convert_timestamp_column(connection, table, column)
+            for table, column in timestamp_fields
+        )
+        running_batches = connection.execute(
+            "SELECT batch_id, source_name, started_at FROM import_batches WHERE status='running'"
+        ).fetchall()
+        for batch_id, source_name, started_at in running_batches:
+            if source_name == "selenium-income-statement":
+                raw_table, normalized_table = "利润表temp", "income_statements"
+            elif source_name == "selenium-balance-sheet":
+                raw_table, normalized_table = "资产负债表temp", "balance_sheets"
+            else:
+                continue
+            raw_count, normalized_count, latest_collected_at = _count_normalized_rows_for_batch(
+                connection, batch_id, raw_table, normalized_table
+            )
+            issue_count = connection.execute(
+                "SELECT COUNT(*) FROM data_quality_issues WHERE batch_id=?",
+                (batch_id,),
+            ).fetchone()[0]
+            completed_at = to_beijing_timestamp(latest_collected_at) or started_at or beijing_now()
+            connection.execute(
+                '''UPDATE import_batches
+                   SET completed_at=?, status='completed', raw_row_count=?,
+                       normalized_row_count=?, issue_count=?
+                   WHERE batch_id=?''',
+                (completed_at, raw_count, normalized_count, issue_count, batch_id),
+            )
+            completed_batches += 1
+    return MetadataRepairResult(
+        timestamps_updated=timestamps_updated,
+        completed_batches=completed_batches,
         backup_path=str(resolved_backup) if resolved_backup else None,
     )
 
@@ -86,9 +208,17 @@ def main() -> None:
     parser.add_argument("--database", required=True)
     parser.add_argument("--backup")
     parser.add_argument("--verify-only", action="store_true")
+    parser.add_argument("--repair-metadata", action="store_true")
     args = parser.parse_args()
     if args.verify_only:
         print(verify_database(args.database))
+        return
+    if args.repair_metadata:
+        result = repair_database_metadata(args.database, args.backup)
+        print(
+            f"timestamps_updated={result.timestamps_updated}, "
+            f"completed_batches={result.completed_batches}"
+        )
         return
     result = migrate_database(args.database, args.backup)
     print(

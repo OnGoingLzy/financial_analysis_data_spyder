@@ -1,0 +1,16 @@
+[
+  {
+    "date": "2026-07-20",
+    "macrostructure": "Workbench Directory",
+    "theme": "Terminal",
+    "enrichment": "none",
+    "brief": "为内部财务研究终端增加公司查询表格入口并完善图表悬停反馈"
+  },
+  {
+    "date": "2026-07-20",
+    "macrostructure": "Workbench",
+    "theme": "Terminal",
+    "enrichment": "none",
+    "brief": "企业财务深度分析研究终端"
+  }
+]

@@ -1,8 +1,9 @@
 from __future__ import annotations
 
 import sqlite3
-from datetime import datetime, timezone
+from datetime import datetime
 from typing import Mapping
+from zoneinfo import ZoneInfo
 
 from financial_normalization import (
     infer_report_type,
@@ -14,6 +15,7 @@ from financial_normalization import (
 
 
 SCHEMA_VERSION = 1
+BEIJING_TIMEZONE = ZoneInfo("Asia/Shanghai")
 
 INCOME_AMOUNT_FIELDS = {
     "net_profit": "net_profit",
@@ -51,8 +53,19 @@ BALANCE_AMOUNT_FIELDS = {
 }
 
 
-def utc_now() -> str:
-    return datetime.now(timezone.utc).isoformat(timespec="seconds")
+def beijing_now() -> str:
+    return datetime.now(BEIJING_TIMEZONE).isoformat(timespec="seconds")
+
+
+def to_beijing_timestamp(value: str | None) -> str | None:
+    if not value:
+        return value
+    parsed = datetime.fromisoformat(value.replace("Z", "+00:00"))
+    if parsed.tzinfo is None:
+        parsed = parsed.replace(tzinfo=BEIJING_TIMEZONE)
+    else:
+        parsed = parsed.astimezone(BEIJING_TIMEZONE)
+    return parsed.isoformat(timespec="seconds")
 
 
 def ensure_normalized_schema(connection: sqlite3.Connection) -> None:
@@ -175,7 +188,7 @@ def _record_issue(
             None if raw_value is None else str(raw_value),
             marker,
             "原始字段为空" if marker == "MISSING_VALUE" else "原始字段无法解析",
-            utc_now(),
+            beijing_now(),
         ),
     )
 
@@ -188,7 +201,7 @@ def _upsert_company(connection: sqlite3.Connection, row: Mapping) -> tuple[str, 
            ON CONFLICT(code) DO UPDATE SET
              raw_code=excluded.raw_code, name=excluded.name,
              market=excluded.market, updated_at=excluded.updated_at''',
-        (code, str(row["code"]), str(row["name"]).strip(), market, utc_now()),
+        (code, str(row["code"]), str(row["name"]).strip(), market, beijing_now()),
     )
     return code, market
 
@@ -225,7 +238,7 @@ def upsert_income_statement(connection: sqlite3.Connection, raw_row: Mapping, ba
               source_record_id=excluded.source_record_id,
               import_batch_id=excluded.import_batch_id,
               collected_at=excluded.collected_at''',
-        (code, period, report_type, *(values[column] for column in columns), row["id"] if "id" in row.keys() else None, batch_id, utc_now()),
+        (code, period, report_type, *(values[column] for column in columns), row["id"] if "id" in row.keys() else None, batch_id, beijing_now()),
     )
 
 
@@ -256,5 +269,5 @@ def upsert_balance_sheet(connection: sqlite3.Connection, raw_row: Mapping, batch
               source_record_id=excluded.source_record_id,
               import_batch_id=excluded.import_batch_id,
               collected_at=excluded.collected_at''',
-        (code, period, report_type, *(values[column] for column in columns), row["id"] if "id" in row.keys() else None, batch_id, utc_now()),
+        (code, period, report_type, *(values[column] for column in columns), row["id"] if "id" in row.keys() else None, batch_id, beijing_now()),
     )

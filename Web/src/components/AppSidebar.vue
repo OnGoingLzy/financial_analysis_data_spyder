@@ -1,11 +1,3 @@
-<script setup lang="ts">
-import { computed } from 'vue'
-import { useAnalysisStore } from '@/stores/analysis'
-
-const store = useAnalysisStore()
-const companyPath = computed(() => `/company/${store.companies[0]?.code ?? 'SH600998'}`)
-</script>
-
 <template>
   <aside class="sidebar">
     <div class="brand">
@@ -14,7 +6,7 @@ const companyPath = computed(() => `/company/${store.companies[0]?.code ?? 'SH60
     </div>
     <nav aria-label="主要导航">
       <RouterLink to="/compare"><span>01</span><b>同行对比</b><small>横向基准与分位</small></RouterLink>
-      <RouterLink :to="companyPath"><span>02</span><b>公司分析</b><small>口径切换与趋势</small></RouterLink>
+      <RouterLink to="/companies"><span>02</span><b>公司分析</b><small>查询公司后深入研究</small></RouterLink>
       <RouterLink to="/data-quality"><span>03</span><b>数据质量</b><small>来源、批次与异常</small></RouterLink>
     </nav>
     <div class="sidebar-foot"><span class="status-dot"></span><span>LOCAL / READ ONLY</span></div>

@@ -1,6 +1,6 @@
 import sqlite3
 
-from migrate_financial_data import migrate_database
+from migrate_financial_data import migrate_database, repair_database_metadata
 
 
 def build_raw_fixture_database(tmp_path):
@@ -67,3 +67,30 @@ def test_migration_records_invalid_values_as_quality_issues(tmp_path):
             "SELECT field_name, issue_code FROM data_quality_issues WHERE raw_value='--'"
         ).fetchone()
     assert issue == ("other_comprehensive_income", "MISSING_VALUE")
+
+
+def test_repair_metadata_converts_timezone_and_completes_legacy_batch(tmp_path):
+    database_path = build_raw_fixture_database(tmp_path)
+    migrate_database(database_path)
+    with sqlite3.connect(database_path) as connection:
+        connection.execute('UPDATE "利润表temp" SET insert_batch=?', ("legacy-running",))
+        connection.execute(
+            '''INSERT INTO import_batches
+               (batch_id, source_name, started_at, status, raw_row_count, normalized_row_count, issue_count)
+               VALUES ('legacy-running', 'selenium-income-statement',
+                       '2026-07-20T05:41:17+00:00', 'running', 0, 0, 0)'''
+        )
+        connection.execute("UPDATE companies SET updated_at='2026-07-20T05:41:17+00:00'")
+        connection.execute("UPDATE income_statements SET collected_at='2026-07-20T05:41:18+00:00'")
+    result = repair_database_metadata(database_path)
+    assert result.completed_batches == 1
+    with sqlite3.connect(database_path) as connection:
+        batch = connection.execute(
+            "SELECT status, raw_row_count, normalized_row_count, started_at, completed_at "
+            "FROM import_batches WHERE batch_id='legacy-running'"
+        ).fetchone()
+        company_time = connection.execute("SELECT updated_at FROM companies LIMIT 1").fetchone()[0]
+    assert batch[:3] == ("completed", 2, 1)
+    assert batch[3] == "2026-07-20T13:41:17+08:00"
+    assert batch[4].endswith("+08:00")
+    assert company_time == "2026-07-20T13:41:17+08:00"

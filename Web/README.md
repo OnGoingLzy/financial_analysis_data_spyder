@@ -38,6 +38,14 @@ python migrate_financial_data.py --database financial_analysis.db --verify-only
 
 迁移只新增 `companies`、`income_statements`、`balance_sheets`、`import_batches` 和 `data_quality_issues`，不会删除原始表。迁移程序可重复运行，同一公司同一报告期使用冲突更新，不产生重复正式记录。
 
+若数据库来自旧版本，需要修复 UTC 时间或遗留的 `running` 批次，可先备份并执行：
+
+```powershell
+python migrate_financial_data.py --database financial_analysis.db --backup financial_analysis.before_metadata_repair.db --repair-metadata
+```
+
+修复程序会把标准表时间转换为 `Asia/Shanghai` 的 `+08:00` ISO 时间，并根据原始表和正式表核对遗留 Selenium 批次后写入完成状态与行数。
+
 ## 安装与开发
 
 ```powershell
@@ -91,6 +99,7 @@ npm start
 - 正负号和文字说明与颜色同时使用，颜色不是唯一信号。
 - `NULL` 显示为“暂无数据”，绝不替换为 0。
 - 负财务费用显示为“财务净收益”。
+- 标准表的采集、更新时间和批次时间统一使用北京时间（`Asia/Shanghai`，`+08:00`）。
 
 ## 常见错误码
 

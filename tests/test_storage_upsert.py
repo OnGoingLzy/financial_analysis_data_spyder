@@ -1,4 +1,5 @@
 import sqlite3
+from datetime import datetime, timedelta
 
 import pytest
 
@@ -45,6 +46,13 @@ def test_insert_lrb_writes_raw_and_updates_normalized_record(tmp_path, monkeypat
         assert connection.execute(
             "SELECT net_profit FROM income_statements WHERE code='SZ000705' AND report_period='2026-03-31'"
         ).fetchone()[0] == -20_000_000
+        batch = connection.execute(
+            "SELECT status, raw_row_count, normalized_row_count, issue_count, started_at, completed_at "
+            "FROM import_batches WHERE batch_id='batch-test'"
+        ).fetchone()
+        assert batch[:4] == ("completed", 1, 1, 0)
+        assert datetime.fromisoformat(batch[4]).utcoffset() == timedelta(hours=8)
+        assert datetime.fromisoformat(batch[5]).utcoffset() == timedelta(hours=8)
 
 
 def test_income_row_labels_keep_operating_cost_separate():

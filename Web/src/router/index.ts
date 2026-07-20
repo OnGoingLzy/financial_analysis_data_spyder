@@ -5,6 +5,7 @@ export const router = createRouter({
   routes: [
     { path: '/', redirect: '/compare' },
     { path: '/compare', component: () => import('@/views/CompareView.vue'), meta: { title: '同行对比' } },
+    { path: '/companies', component: () => import('@/views/CompanyDirectoryView.vue'), meta: { title: '公司查询' } },
     { path: '/company/:code', component: () => import('@/views/CompanyView.vue'), meta: { title: '公司分析' } },
     { path: '/data-quality', component: () => import('@/views/DataQualityView.vue'), meta: { title: '数据质量' } },
   ],
