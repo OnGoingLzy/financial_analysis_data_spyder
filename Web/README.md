@@ -36,7 +36,13 @@ python migrate_financial_data.py --database financial_analysis.db --backup finan
 python migrate_financial_data.py --database financial_analysis.db --verify-only
 ```
 
-迁移只新增 `companies`、`income_statements`、`balance_sheets`、`import_batches` 和 `data_quality_issues`，不会删除原始表。迁移程序可重复运行，同一公司同一报告期使用冲突更新，不产生重复正式记录。
+迁移只新增 `companies`、`income_statements`、`balance_sheets`、`cash_flow_statements`、`import_batches` 和 `data_quality_issues`，不会删除原始表。迁移程序可重复运行，同一公司同一报告期使用冲突更新，不产生重复正式记录。
+
+已有标准表的数据库可只升级结构，不重复迁移历史数据：
+
+```powershell
+python migrate_financial_data.py --database financial_analysis.db --backup financial_analysis.before_peer_analysis.db --upgrade-schema
+```
 
 若数据库来自旧版本，需要修复 UTC 时间或遗留的 `running` 批次，可先备份并执行：
 
@@ -89,7 +95,11 @@ npm start
 - 年度：只显示 FY 年报。
 - ROE：累计归母净利润除以年初与期末平均归母净资产，并按 Q1、H1、Q3、FY 分别使用 4、2、4/3、1 的年化因子。缺少上年末净资产时不估算。
 
-当前数据库没有现金流量表，界面明确显示范围说明，不虚构现金流指标。
+- 现金含量：经营活动现金流净额除以归母净利润；现金收入比为销售商品、提供劳务收到的现金除以营业收入。
+- 自由现金流：经营活动现金流净额减资本性支出。
+- 现金转换周期：应收周转天数加存货周转天数减应付周转天数；缺少任一基础字段时不估算。
+
+新采集任务会同步填充现金流量标准表及扩展后的利润表、资产负债表字段。历史报告期在重新采集前保持 `NULL`，界面会明确显示“暂无数据”，不会用模拟值补齐。
 
 ## 数值与颜色约定
 

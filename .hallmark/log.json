@@ -1,6 +1,13 @@
 [
   {
     "date": "2026-07-20",
+    "macrostructure": "Analytical Chapters",
+    "theme": "Terminal",
+    "enrichment": "none",
+    "brief": "同行分析升级为综合分位、增长盈利、利润结构、营运效率和现金风险五区"
+  },
+  {
+    "date": "2026-07-20",
     "macrostructure": "Workbench Directory",
     "theme": "Terminal",
     "enrichment": "none",

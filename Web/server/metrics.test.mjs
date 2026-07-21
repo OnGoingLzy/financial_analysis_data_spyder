@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest'
 
-import { calculateRatios, calculateTtm, deriveSingleQuarters, findLatestCommonPeriod, openingBalancePeriod } from './metrics.mjs'
+import { calculatePeerMetrics, calculateRatios, calculateTtm, deriveSingleQuarters, findLatestCommonPeriod, openingBalancePeriod } from './metrics.mjs'
 
 describe('财务指标引擎', () => {
   const records = [
@@ -40,5 +40,28 @@ describe('财务指标引擎', () => {
   it('ROE 的期初净资产固定取上年末', () => {
     expect(openingBalancePeriod('2026-03-31')).toBe('2025-12-31')
     expect(openingBalancePeriod('2025-12-31')).toBe('2024-12-31')
+  })
+})
+
+describe('同行经营诊断指标', () => {
+  it('统一计算费用率、现金质量、周转周期和杜邦分解', () => {
+    const metrics = calculatePeerMetrics(
+      { reportType: 'FY', revenue: 1000, operatingCost: 700, netProfitToParent: 80, netProfitAfterNonRecurring: 70, salesExpenses: 40, managementExpenses: 30, researchExpenses: 20, financialExpenses: 10, operatingProfit: 110, totalProfit: 100, interestExpenses: 20 },
+      { totalAssets: 2000, totalLiabilities: 1200, equityToParent: 700, monetaryFunds: 200, inventory: 180, accountsReceivable: 240, accountsPayable: 150, currentAssets: 800, currentLiabilities: 500, shortTermBorrowings: 100 },
+      { totalAssets: 1800, equityToParent: 650, inventory: 160, accountsReceivable: 200, accountsPayable: 130 },
+      { netOperatingCashFlow: 100, capitalExpenditure: 30 },
+    )
+    expect(metrics).toMatchObject({ salesExpenseRatio: 4, operatingMargin: 11, cashProfitRatio: 1.25, freeCashFlow: 70, currentRatio: 1.6, quickRatio: 1.24, cashShortDebtRatio: 2 })
+    expect(metrics.cashConversionCycle).toBeCloseTo(95.93, 1)
+    expect(metrics.roe).toBeCloseTo(11.85, 1)
+    expect(metrics.assetTurnover).toBeCloseTo(0.526, 2)
+    expect(metrics.equityMultiplier).toBeCloseTo(2.815, 2)
+  })
+
+  it('缺少现金流和期初值时保持 NULL', () => {
+    const metrics = calculatePeerMetrics({ reportType: 'FY', revenue: 100, netProfitToParent: 10 }, { totalAssets: 200 }, null, null)
+    expect(metrics.cashProfitRatio).toBeNull()
+    expect(metrics.cashConversionCycle).toBeNull()
+    expect(metrics.roe).toBeNull()
   })
 })

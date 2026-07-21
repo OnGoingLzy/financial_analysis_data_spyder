@@ -4,12 +4,12 @@ import { fileURLToPath } from 'node:url'
 import { DatabaseSync } from 'node:sqlite'
 
 import { ApiError } from './errors.mjs'
-import { calculateRatios, findLatestCommonPeriod, median, openingBalancePeriod, percentileRank } from './metrics.mjs'
+import { calculatePeerMetrics, calculateRatios, findLatestCommonPeriod, median, openingBalancePeriod, percentileRank } from './metrics.mjs'
 
 export const DEFAULT_DATABASE_PATH = import.meta.url.startsWith('file:')
   ? resolve(dirname(fileURLToPath(import.meta.url)), '..', '..', 'financial_analysis.db')
   : resolve(process.cwd(), '..', 'financial_analysis.db')
-const requiredTables = ['companies', 'income_statements', 'balance_sheets', 'import_batches', 'data_quality_issues']
+const requiredTables = ['companies', 'income_statements', 'balance_sheets', 'cash_flow_statements', 'import_batches', 'data_quality_issues']
 
 export function openDatabase(databasePath = DEFAULT_DATABASE_PATH) {
   if (!existsSync(databasePath)) {
@@ -60,14 +60,16 @@ function incomeToCamel(row) {
     taxesAndSurcharges: row.business_tax_and_surcharges,
     operatingProfit: row.operating_profit,
     totalProfit: row.total_profit,
+    interestExpenses: row.interest_expenses,
+    netProfitAfterNonRecurring: row.net_profit_after_non_recurring,
   }
 }
 
 function balanceToCamel(row) {
   if (!row) return null
-  const equityToParent = row.total_assets == null || row.total_liabilities == null
+  const equityToParent = row.equity_attributable_to_parent ?? (row.total_assets == null || row.total_liabilities == null
     ? null
-    : row.total_assets - row.total_liabilities - (row.minority_shareholder_equity ?? 0)
+    : row.total_assets - row.total_liabilities - (row.minority_shareholder_equity ?? 0))
   return {
     reportPeriod: row.report_period,
     reportType: row.report_type,
@@ -79,12 +81,36 @@ function balanceToCamel(row) {
     undistributedProfits: row.undistributed_profits,
     minorityShareholderEquity: row.minority_shareholder_equity,
     equityToParent,
+    monetaryFunds: row.monetary_funds,
+    inventory: row.inventory,
+    accountsPayable: row.accounts_payable,
+    currentAssets: row.current_assets,
+    currentLiabilities: row.current_liabilities,
+    shortTermBorrowings: row.short_term_borrowings,
+    longTermBorrowings: row.long_term_borrowings,
+    totalEquity: row.total_equity,
+    goodwill: row.goodwill,
+  }
+}
+
+function cashFlowToCamel(row) {
+  if (!row) return null
+  return {
+    reportPeriod: row.report_period,
+    reportType: row.report_type,
+    netOperatingCashFlow: row.net_operating_cash_flow,
+    netInvestingCashFlow: row.net_investing_cash_flow,
+    netFinancingCashFlow: row.net_financing_cash_flow,
+    cashReceivedFromSales: row.cash_received_from_sales,
+    capitalExpenditure: row.capital_expenditure,
+    endingCashAndEquivalents: row.ending_cash_and_equivalents,
   }
 }
 
 export function getMeta(db, databasePath) {
   const income = one(db, 'SELECT COUNT(*) count, MIN(report_period) minPeriod, MAX(report_period) maxPeriod FROM income_statements')
   return {
+    schemaVersion: one(db, 'PRAGMA user_version').user_version,
     databasePath,
     modifiedAt: statSync(databasePath).mtime.toISOString(),
     companyCount: one(db, 'SELECT COUNT(*) count FROM companies').count,
@@ -92,6 +118,7 @@ export function getMeta(db, databasePath) {
     periodEnd: income.maxPeriod,
     incomeStatementCount: income.count,
     balanceSheetCount: one(db, 'SELECT COUNT(*) count FROM balance_sheets').count,
+    cashFlowStatementCount: one(db, 'SELECT COUNT(*) count FROM cash_flow_statements').count,
     qualityIssueCount: one(db, 'SELECT COUNT(*) count FROM data_quality_issues').count,
   }
 }
@@ -114,24 +141,28 @@ export function getCompany(db, code) {
   const company = one(db, 'SELECT code, name, market, industry_name industryName FROM companies WHERE code=:code', { code })
   if (!company) throw new ApiError('COMPANY_NOT_FOUND', '未找到该公司', 404, false, 'company')
   const periods = all(db, 'SELECT report_period reportPeriod, report_type reportType FROM income_statements WHERE code=:code ORDER BY report_period DESC', { code })
-  return { ...company, periods, cashFlowAvailable: false }
+  const cashFlowAvailable = one(db, 'SELECT COUNT(*) count FROM cash_flow_statements WHERE code=:code', { code }).count > 0
+  return { ...company, periods, cashFlowAvailable }
 }
 
 function getAnalysisRows(db, code) {
   const income = all(db, 'SELECT * FROM income_statements WHERE code=:code ORDER BY report_period', { code }).map(incomeToCamel)
   const balances = all(db, 'SELECT * FROM balance_sheets WHERE code=:code ORDER BY report_period', { code }).map(balanceToCamel)
+  const cashFlows = all(db, 'SELECT * FROM cash_flow_statements WHERE code=:code ORDER BY report_period', { code }).map(cashFlowToCamel)
   const balanceMap = new Map(balances.map((row) => [row.reportPeriod, row]))
+  const cashFlowMap = new Map(cashFlows.map((row) => [row.reportPeriod, row]))
   return income.map((row) => {
     const balance = balanceMap.get(row.reportPeriod) ?? null
     const previousPeriod = openingBalancePeriod(row.reportPeriod)
     const previousBalance = previousPeriod ? balanceMap.get(previousPeriod) ?? null : null
-    return { ...row, balance, ratios: balance ? calculateRatios(row, balance, previousBalance) : null }
+    const cashFlow = cashFlowMap.get(row.reportPeriod) ?? null
+    return { ...row, balance, cashFlow, ratios: balance ? calculatePeerMetrics(row, balance, previousBalance, cashFlow) : null }
   })
 }
 
 export function getCompanyAnalysis(db, code) {
   const company = getCompany(db, code)
-  return { company, records: getAnalysisRows(db, code), cashFlowNotice: '当前数据库未提供现金流量表，相关分析暂不展示。' }
+  return { company, records: getAnalysisRows(db, code), cashFlowNotice: company.cashFlowAvailable ? null : '当前公司尚未补采现金流量表，现金分析保持为空。' }
 }
 
 export function getComparison(db, codes, requestedPeriod, mode = 'absolute') {
@@ -143,10 +174,14 @@ export function getComparison(db, codes, requestedPeriod, mode = 'absolute') {
     if (!company) throw new ApiError('COMPANY_NOT_FOUND', `未找到公司 ${code}`, 404, false, 'comparison')
     const income = incomeToCamel(one(db, 'SELECT * FROM income_statements WHERE code=:code AND report_period=:period', { code, period: commonPeriod }))
     const balance = balanceToCamel(one(db, 'SELECT * FROM balance_sheets WHERE code=:code AND report_period=:period', { code, period: commonPeriod }))
-    const metrics = income && balance ? { ...income, ...calculateRatios(income, balance, null), debtRatio: calculateRatios(income, balance, null).debtRatio } : income
-    return { ...company, metrics }
+    const previousPeriod = openingBalancePeriod(commonPeriod)
+    const previousBalance = balanceToCamel(one(db, 'SELECT * FROM balance_sheets WHERE code=:code AND report_period=:period', { code, period: previousPeriod }))
+    const cashFlow = cashFlowToCamel(one(db, 'SELECT * FROM cash_flow_statements WHERE code=:code AND report_period=:period', { code, period: commonPeriod }))
+    const peerMetrics = income && balance ? calculatePeerMetrics(income, balance, previousBalance, cashFlow) : {}
+    const profile = { ...income, ...peerMetrics }
+    return { ...company, profile, metrics: profile }
   })
-  const metricNames = ['revenue', 'netProfitToParent', 'grossMargin', 'netMargin', 'debtRatio', 'revenueYoyGrowth']
+  const metricNames = ['revenue', 'netProfitToParent', 'grossMargin', 'netMargin', 'operatingMargin', 'debtRatio', 'revenueYoyGrowth', 'cashProfitRatio', 'cashConversionCycle', 'roe', 'assetTurnover', 'currentRatio', 'quickRatio', 'salesExpenseRatio', 'researchExpenseRatio']
   const medians = Object.fromEntries(metricNames.map((name) => [name, median(rows.map((row) => row.metrics?.[name] ?? null))]))
   const normalizedRows = rows.map((row) => ({
     ...row,

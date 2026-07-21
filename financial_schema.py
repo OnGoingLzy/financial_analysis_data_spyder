@@ -14,7 +14,7 @@ from financial_normalization import (
 )
 
 
-SCHEMA_VERSION = 1
+SCHEMA_VERSION = 2
 BEIJING_TIMEZONE = ZoneInfo("Asia/Shanghai")
 
 INCOME_AMOUNT_FIELDS = {
@@ -35,6 +35,10 @@ INCOME_AMOUNT_FIELDS = {
     "netProfitFromOngoingOperations": "net_profit_from_ongoing_operations",
     "netProfitAttributableToTheParentCompany": "net_profit_attributable_to_parent",
     "netProfitAfterDeductingNonRecurringGainsAndLosses": "net_profit_after_non_recurring",
+    "income_tax_expense": "income_tax_expense",
+    "investment_income": "investment_income",
+    "asset_impairment_loss": "asset_impairment_loss",
+    "credit_impairment_loss": "credit_impairment_loss",
 }
 INCOME_RATIO_FIELDS = {
     "gross_profit_margin": "gross_profit_margin",
@@ -50,6 +54,24 @@ BALANCE_AMOUNT_FIELDS = {
     "undistributed_profits": "undistributed_profits",
     "minority_shareholder_equity": "minority_shareholder_equity",
     "accounts_receivable": "accounts_receivable",
+    "monetary_funds": "monetary_funds",
+    "inventory": "inventory",
+    "accounts_payable": "accounts_payable",
+    "current_assets": "current_assets",
+    "current_liabilities": "current_liabilities",
+    "short_term_borrowings": "short_term_borrowings",
+    "long_term_borrowings": "long_term_borrowings",
+    "total_equity": "total_equity",
+    "equity_attributable_to_parent": "equity_attributable_to_parent",
+    "goodwill": "goodwill",
+}
+CASH_FLOW_AMOUNT_FIELDS = {
+    "net_operating_cash_flow": "net_operating_cash_flow",
+    "net_investing_cash_flow": "net_investing_cash_flow",
+    "net_financing_cash_flow": "net_financing_cash_flow",
+    "cash_received_from_sales": "cash_received_from_sales",
+    "capital_expenditure": "capital_expenditure",
+    "ending_cash_and_equivalents": "ending_cash_and_equivalents",
 }
 
 
@@ -78,6 +100,7 @@ def ensure_normalized_schema(connection: sqlite3.Connection) -> None:
             name TEXT NOT NULL,
             market TEXT NOT NULL CHECK (market IN ('SH', 'SZ')),
             industry_name TEXT,
+            business_model TEXT,
             updated_at TEXT NOT NULL
         );
         CREATE TABLE IF NOT EXISTS import_batches (
@@ -115,6 +138,10 @@ def ensure_normalized_schema(connection: sqlite3.Connection) -> None:
             net_profit_attributable_to_parent INTEGER,
             net_profit_after_non_recurring INTEGER,
             revenue_yoy_growth REAL,
+            income_tax_expense INTEGER,
+            investment_income INTEGER,
+            asset_impairment_loss INTEGER,
+            credit_impairment_loss INTEGER,
             source_record_id INTEGER,
             import_batch_id TEXT REFERENCES import_batches(batch_id),
             collected_at TEXT NOT NULL,
@@ -135,6 +162,33 @@ def ensure_normalized_schema(connection: sqlite3.Connection) -> None:
             undistributed_profits INTEGER,
             minority_shareholder_equity INTEGER,
             accounts_receivable INTEGER,
+            monetary_funds INTEGER,
+            inventory INTEGER,
+            accounts_payable INTEGER,
+            current_assets INTEGER,
+            current_liabilities INTEGER,
+            short_term_borrowings INTEGER,
+            long_term_borrowings INTEGER,
+            total_equity INTEGER,
+            equity_attributable_to_parent INTEGER,
+            goodwill INTEGER,
+            source_record_id INTEGER,
+            import_batch_id TEXT REFERENCES import_batches(batch_id),
+            collected_at TEXT NOT NULL,
+            UNIQUE (code, report_period)
+        );
+        CREATE TABLE IF NOT EXISTS cash_flow_statements (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            code TEXT NOT NULL REFERENCES companies(code),
+            report_period TEXT NOT NULL,
+            report_type TEXT NOT NULL CHECK (report_type IN ('Q1', 'H1', 'Q3', 'FY')),
+            currency TEXT NOT NULL DEFAULT 'CNY',
+            net_operating_cash_flow INTEGER,
+            net_investing_cash_flow INTEGER,
+            net_financing_cash_flow INTEGER,
+            cash_received_from_sales INTEGER,
+            capital_expenditure INTEGER,
+            ending_cash_and_equivalents INTEGER,
             source_record_id INTEGER,
             import_batch_id TEXT REFERENCES import_batches(batch_id),
             collected_at TEXT NOT NULL,
@@ -154,9 +208,28 @@ def ensure_normalized_schema(connection: sqlite3.Connection) -> None:
         );
         CREATE INDEX IF NOT EXISTS idx_income_period ON income_statements(report_period);
         CREATE INDEX IF NOT EXISTS idx_balance_period ON balance_sheets(report_period);
+        CREATE INDEX IF NOT EXISTS idx_cash_flow_period ON cash_flow_statements(report_period);
         CREATE INDEX IF NOT EXISTS idx_quality_batch ON data_quality_issues(batch_id);
         '''
     )
+    upgrades = {
+        "companies": {"business_model": "TEXT"},
+        "income_statements": {
+            "income_tax_expense": "INTEGER", "investment_income": "INTEGER",
+            "asset_impairment_loss": "INTEGER", "credit_impairment_loss": "INTEGER",
+        },
+        "balance_sheets": {
+            "monetary_funds": "INTEGER", "inventory": "INTEGER", "accounts_payable": "INTEGER",
+            "current_assets": "INTEGER", "current_liabilities": "INTEGER",
+            "short_term_borrowings": "INTEGER", "long_term_borrowings": "INTEGER",
+            "total_equity": "INTEGER", "equity_attributable_to_parent": "INTEGER", "goodwill": "INTEGER",
+        },
+    }
+    for table, columns in upgrades.items():
+        existing = {row[1] for row in connection.execute(f"PRAGMA table_info({table})")}
+        for column, sql_type in columns.items():
+            if column not in existing:
+                connection.execute(f"ALTER TABLE {table} ADD COLUMN {column} {sql_type}")
     connection.execute(f"PRAGMA user_version = {SCHEMA_VERSION}")
 
 
@@ -216,14 +289,18 @@ def upsert_income_statement(connection: sqlite3.Connection, raw_row: Mapping, ba
         return
     values: dict[str, object] = {}
     for source, target in INCOME_AMOUNT_FIELDS.items():
-        raw_value = row[source] if source in row.keys() else None
+        if source not in row.keys():
+            continue
+        raw_value = row[source]
         values[target] = parse_amount_to_yuan(raw_value)
-        if values[target] is None:
+        if source in row.keys() and values[target] is None:
             _record_issue(connection, batch_id, "income", code, period, target, raw_value)
     for source, target in INCOME_RATIO_FIELDS.items():
-        raw_value = row[source] if source in row.keys() else None
+        if source not in row.keys():
+            continue
+        raw_value = row[source]
         values[target] = parse_percentage_points(raw_value)
-        if values[target] is None:
+        if source in row.keys() and values[target] is None:
             _record_issue(connection, batch_id, "income", code, period, target, raw_value)
     columns = list(values)
     placeholders = ", ".join("?" for _ in columns)
@@ -252,15 +329,51 @@ def upsert_balance_sheet(connection: sqlite3.Connection, raw_row: Mapping, batch
         return
     values: dict[str, object] = {}
     for source, target in BALANCE_AMOUNT_FIELDS.items():
-        raw_value = row[source] if source in row.keys() else None
+        if source not in row.keys():
+            continue
+        raw_value = row[source]
         values[target] = parse_amount_to_yuan(raw_value)
-        if values[target] is None:
+        if source in row.keys() and values[target] is None:
             _record_issue(connection, batch_id, "balance", code, period, target, raw_value)
     columns = list(values)
     placeholders = ", ".join("?" for _ in columns)
     update_clause = ", ".join(f"{column}=excluded.{column}" for column in columns)
     connection.execute(
         f'''INSERT INTO balance_sheets
+            (code, report_period, report_type, currency, {", ".join(columns)},
+             source_record_id, import_batch_id, collected_at)
+            VALUES (?, ?, ?, 'CNY', {placeholders}, ?, ?, ?)
+            ON CONFLICT(code, report_period) DO UPDATE SET
+              report_type=excluded.report_type, {update_clause},
+              source_record_id=excluded.source_record_id,
+              import_batch_id=excluded.import_batch_id,
+              collected_at=excluded.collected_at''',
+        (code, period, report_type, *(values[column] for column in columns), row["id"] if "id" in row.keys() else None, batch_id, beijing_now()),
+    )
+
+
+def upsert_cash_flow_statement(connection: sqlite3.Connection, raw_row: Mapping, batch_id: str) -> None:
+    row = _as_mapping(raw_row)
+    code, _ = _upsert_company(connection, row)
+    period = normalize_report_period(row["disclosure_date"])
+    report_type = infer_report_type(period)
+    if not period or not report_type:
+        _record_issue(connection, batch_id, "cash_flow", code, period, "disclosure_date", row["disclosure_date"])
+        return
+    values = {
+        target: parse_amount_to_yuan(row[source])
+        for source, target in CASH_FLOW_AMOUNT_FIELDS.items()
+        if source in row.keys()
+    }
+    for source, target in CASH_FLOW_AMOUNT_FIELDS.items():
+        raw_value = row[source] if source in row.keys() else None
+        if source in row.keys() and values[target] is None:
+            _record_issue(connection, batch_id, "cash_flow", code, period, target, raw_value)
+    columns = list(values)
+    placeholders = ", ".join("?" for _ in columns)
+    update_clause = ", ".join(f"{column}=excluded.{column}" for column in columns)
+    connection.execute(
+        f'''INSERT INTO cash_flow_statements
             (code, report_period, report_type, currency, {", ".join(columns)},
              source_record_id, import_batch_id, collected_at)
             VALUES (?, ?, ?, 'CNY', {placeholders}, ?, ?, ?)

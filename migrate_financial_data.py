@@ -33,6 +33,22 @@ class MetadataRepairResult:
     backup_path: str | None = None
 
 
+def upgrade_database_schema(
+    database_path: str | Path,
+    backup_path: str | Path | None = None,
+) -> int:
+    """仅升级标准表结构，不重复迁移历史原始数据。"""
+    database_path = Path(database_path).resolve()
+    if not database_path.exists():
+        raise FileNotFoundError(f"未找到数据库：{database_path}")
+    resolved_backup = Path(backup_path).resolve() if backup_path else None
+    if resolved_backup:
+        _create_backup(database_path, resolved_backup)
+    with sqlite3.connect(database_path) as connection:
+        ensure_normalized_schema(connection)
+        return connection.execute("PRAGMA user_version").fetchone()[0]
+
+
 def _create_backup(source_path: Path, backup_path: Path) -> None:
     backup_path.parent.mkdir(parents=True, exist_ok=True)
     with sqlite3.connect(source_path) as source, sqlite3.connect(backup_path) as target:
@@ -149,6 +165,7 @@ def repair_database_metadata(
         ("import_batches", "completed_at"),
         ("income_statements", "collected_at"),
         ("balance_sheets", "collected_at"),
+        ("cash_flow_statements", "collected_at"),
         ("data_quality_issues", "created_at"),
     )
     completed_batches = 0
@@ -197,6 +214,7 @@ def verify_database(database_path: str | Path) -> dict[str, int | bool]:
             "companies": connection.execute("SELECT COUNT(*) FROM companies").fetchone()[0],
             "income_statements": connection.execute("SELECT COUNT(*) FROM income_statements").fetchone()[0],
             "balance_sheets": connection.execute("SELECT COUNT(*) FROM balance_sheets").fetchone()[0],
+            "cash_flow_statements": connection.execute("SELECT COUNT(*) FROM cash_flow_statements").fetchone()[0],
             "negative_financial_expenses": connection.execute("SELECT COUNT(*) FROM income_statements WHERE financial_expenses < 0").fetchone()[0],
             "duplicate_income_periods": connection.execute("SELECT COUNT(*) FROM (SELECT code, report_period FROM income_statements GROUP BY code, report_period HAVING COUNT(*) > 1)").fetchone()[0],
             "duplicate_balance_periods": connection.execute("SELECT COUNT(*) FROM (SELECT code, report_period FROM balance_sheets GROUP BY code, report_period HAVING COUNT(*) > 1)").fetchone()[0],
@@ -209,6 +227,7 @@ def main() -> None:
     parser.add_argument("--backup")
     parser.add_argument("--verify-only", action="store_true")
     parser.add_argument("--repair-metadata", action="store_true")
+    parser.add_argument("--upgrade-schema", action="store_true")
     args = parser.parse_args()
     if args.verify_only:
         print(verify_database(args.database))
@@ -219,6 +238,10 @@ def main() -> None:
             f"timestamps_updated={result.timestamps_updated}, "
             f"completed_batches={result.completed_batches}"
         )
+        return
+    if args.upgrade_schema:
+        version = upgrade_database_schema(args.database, args.backup)
+        print(f"schema_version={version}")
         return
     result = migrate_database(args.database, args.backup)
     print(

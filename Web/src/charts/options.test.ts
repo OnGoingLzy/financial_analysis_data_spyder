@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest'
 
-import { createBarOption, createTrendOption } from './options'
+import { createBarOption, createCashRiskOption, createGrowthProfitOption, createIncomeStructureOption, createPeerHeatmapOption, createTrendOption, createWorkingCapitalOption } from './options'
 
 const colors = {
   accent: '#28d7e5',
@@ -43,5 +43,21 @@ describe('财务图表交互配置', () => {
       && series.blur?.lineStyle?.opacity === 1
     ))).toBe(true)
     expect(option.tooltip).toMatchObject({ trigger: 'axis' })
+  })
+})
+
+describe('同行诊断图表配置', () => {
+  const rows = [{
+    name: '中国医药',
+    profile: { revenue: 1000, revenueYoyGrowth: 6, netMargin: 3, operatingCost: 700, salesExpenses: 40, managementExpenses: 30, researchExpenses: 20, financialExpenses: 10, netProfitToParent: 30, receivableDays: 80, inventoryDays: 50, payableDays: 40, cashConversionCycle: 90, cashProfitRatio: 1.2, debtRatio: 60, cashShortDebtRatio: 1.5 },
+    metrics: { netMargin: { percentile: 70 }, revenueYoyGrowth: { percentile: 60 }, cashProfitRatio: { percentile: 80 }, cashConversionCycle: { percentile: 40 }, debtRatio: { percentile: 30 } },
+  }]
+
+  it('生成五类互补分析图，并保持悬停图形可见', () => {
+    expect(createPeerHeatmapOption(rows, colors).series).toBeTruthy()
+    expect(createGrowthProfitOption(rows, colors).series).toBeTruthy()
+    expect(createIncomeStructureOption(rows, colors).series).toHaveLength(6)
+    expect(createWorkingCapitalOption(rows, colors).series).toHaveLength(4)
+    expect(createCashRiskOption(rows, colors).series).toBeTruthy()
   })
 })

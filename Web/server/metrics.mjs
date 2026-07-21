@@ -63,6 +63,62 @@ export function calculateRatios(income, balance, previousBalance) {
   return { grossMargin, netMargin, debtRatio, receivablesToAssets, roe, annualizedRoe }
 }
 
+function plainDivide(numerator, denominator) {
+  if (numerator == null || denominator == null || denominator === 0) return null
+  return numerator / denominator
+}
+
+function average(current, previous) {
+  return current == null || previous == null ? null : (current + previous) / 2
+}
+
+function turnoverDays(averageBalance, flow, days) {
+  const turnover = plainDivide(averageBalance, flow)
+  return turnover == null || days == null ? null : turnover * days
+}
+
+export function calculatePeerMetrics(income = {}, balance = {}, previousBalance = null, cashFlow = null) {
+  const netProfit = income.netProfitToParent ?? income.netProfit ?? null
+  const days = { Q1: 90, H1: 181, Q3: 273, FY: 365 }[income.reportType] ?? null
+  const averageAssets = previousBalance ? average(balance.totalAssets, previousBalance.totalAssets) : null
+  const averageEquity = previousBalance ? average(balance.equityToParent, previousBalance.equityToParent) : null
+  const averageReceivables = previousBalance ? average(balance.accountsReceivable, previousBalance.accountsReceivable) : null
+  const averageInventory = previousBalance ? average(balance.inventory, previousBalance.inventory) : null
+  const averagePayables = previousBalance ? average(balance.accountsPayable, previousBalance.accountsPayable) : null
+  const receivableDays = turnoverDays(averageReceivables, income.revenue, days)
+  const inventoryDays = turnoverDays(averageInventory, income.operatingCost, days)
+  const payableDays = turnoverDays(averagePayables, income.operatingCost, days)
+  const assetTurnover = plainDivide(income.revenue, averageAssets)
+  const equityMultiplier = plainDivide(averageAssets, averageEquity)
+  const roe = safeDivide(netProfit, averageEquity)
+  const cashProfitRatio = plainDivide(cashFlow?.netOperatingCashFlow, netProfit)
+  return {
+    grossMargin: income.grossMargin ?? safeDivide(income.grossProfit, income.revenue),
+    netMargin: safeDivide(netProfit, income.revenue),
+    operatingMargin: safeDivide(income.operatingProfit, income.revenue),
+    deductedNetMargin: safeDivide(income.netProfitAfterNonRecurring, income.revenue),
+    salesExpenseRatio: safeDivide(income.salesExpenses, income.revenue),
+    managementExpenseRatio: safeDivide(income.managementExpenses, income.revenue),
+    researchExpenseRatio: safeDivide(income.researchExpenses, income.revenue),
+    financialExpenseRatio: safeDivide(income.financialExpenses, income.revenue),
+    debtRatio: safeDivide(balance.totalLiabilities, balance.totalAssets),
+    currentRatio: plainDivide(balance.currentAssets, balance.currentLiabilities),
+    quickRatio: plainDivide(balance.currentAssets == null || balance.inventory == null ? null : balance.currentAssets - balance.inventory, balance.currentLiabilities),
+    cashShortDebtRatio: plainDivide(balance.monetaryFunds, balance.shortTermBorrowings),
+    interestCoverage: plainDivide(income.totalProfit == null || income.interestExpenses == null ? null : income.totalProfit + income.interestExpenses, income.interestExpenses),
+    cashProfitRatio,
+    cashRevenueRatio: safeDivide(cashFlow?.netOperatingCashFlow, income.revenue),
+    freeCashFlow: cashFlow?.netOperatingCashFlow == null || cashFlow?.capitalExpenditure == null ? null : cashFlow.netOperatingCashFlow - cashFlow.capitalExpenditure,
+    receivableDays,
+    inventoryDays,
+    payableDays,
+    cashConversionCycle: receivableDays == null || inventoryDays == null || payableDays == null ? null : receivableDays + inventoryDays - payableDays,
+    roe,
+    assetTurnover,
+    equityMultiplier,
+  }
+}
+
 export function median(values) {
   const valid = values.filter((value) => value != null).sort((a, b) => a - b)
   if (!valid.length) return null

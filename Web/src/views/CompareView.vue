@@ -8,6 +8,11 @@ import LoadingState from '@/components/LoadingState.vue'
 import MetricValue from '@/components/MetricValue.vue'
 import ScaleGrowthChart from '@/components/charts/ScaleGrowthChart.vue'
 import ProfitabilityChart from '@/components/charts/ProfitabilityChart.vue'
+import PeerHeatmapChart from '@/components/charts/PeerHeatmapChart.vue'
+import GrowthProfitChart from '@/components/charts/GrowthProfitChart.vue'
+import IncomeStructureChart from '@/components/charts/IncomeStructureChart.vue'
+import WorkingCapitalChart from '@/components/charts/WorkingCapitalChart.vue'
+import CashRiskChart from '@/components/charts/CashRiskChart.vue'
 import { useAnalysisStore } from '@/stores/analysis'
 import type { CompareResponse } from '@/types/financial'
 import { buildCompareQuery } from './viewModel'
@@ -108,6 +113,9 @@ onBeforeUnmount(() => controller?.abort())
         <ScaleGrowthChart :rows="chartRows" title="营收规模对比" :description="mode === 'absolute' ? '统一报告期累计营业收入' : mode === 'index' ? '样本中位数 = 100' : '样本内分位排名'" />
         <ProfitabilityChart :rows="marginRows" title="净利率横截面" description="归母净利润 / 营业收入；负值使用绿色" />
       </div>
+      <section class="analysis-section"><header><h2>综合判断</h2><p>统一报告期下比较质量分位与增长盈利位置。</p></header><div class="diagnostic-grid"><PeerHeatmapChart :rows="comparisonRows" /><GrowthProfitChart :rows="comparisonRows" /></div></section>
+      <section class="analysis-section"><header><h2>利润形成</h2><p>将每百元收入拆分到成本、费用和最终利润。</p></header><IncomeStructureChart :rows="comparisonRows" /></section>
+      <section class="analysis-section"><header><h2>资金效率与风险</h2><p>新字段缺失时保持空状态，重新采集后自动解锁。</p></header><div class="diagnostic-grid"><WorkingCapitalChart :rows="comparisonRows" /><CashRiskChart :rows="comparisonRows" /></div></section>
       <section class="panel comparison-table">
         <header class="panel-header"><div><h2>指标矩阵 · {{ result.commonPeriod }}</h2><p>所有数值均来自标准化正式表</p></div></header>
         <div class="table-scroll"><table><caption class="sr-only">同行财务指标矩阵</caption><thead><tr><th>公司</th><th v-for="metric in metricDefinitions" :key="metric.key">{{ metric.label }}</th></tr></thead><tbody><tr v-for="row in comparisonRows" :key="row.code"><td><RouterLink class="company-link" :to="`/company/${row.code}`"><strong>{{ row.name }}</strong><small>{{ row.code }}</small></RouterLink></td><td v-for="metric in metricDefinitions" :key="metric.key"><MetricValue :value="row.metrics[metric.key]?.value ?? null" :format="mode === 'absolute' ? metric.format : 'number'" :kind="metric.key === 'debtRatio' ? 'neutral' : 'profit'" /><small v-if="mode === 'percentile' && row.metrics[metric.key]?.percentile != null">P{{ Math.round(row.metrics[metric.key].percentile ?? 0) }} / n={{ result.sampleSize }}</small></td></tr></tbody></table></div>
@@ -118,4 +126,10 @@ onBeforeUnmount(() => controller?.abort())
 
 <style scoped>
 .filter-panel { margin-bottom: var(--space-md); }.mode-group { display: flex; gap: var(--space-2xs); }.company-selector { border-top: var(--rule-thin) solid var(--color-rule); }.company-selector summary { padding: var(--space-sm) var(--space-md); color: var(--color-accent); cursor: pointer; font-size: var(--text-sm); }.company-options { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: var(--space-2xs); padding: 0 var(--space-md) var(--space-md); }.company-options label { display: grid; grid-template-columns: auto 1fr; gap: 0 var(--space-xs); padding: var(--space-xs); border: var(--rule-thin) solid var(--color-rule); color: var(--color-ink-muted); cursor: pointer; }.company-options label.selected { border-color: var(--color-accent); background: var(--color-accent-wash); color: var(--color-ink); }.company-options small { grid-column: 2; color: var(--color-ink-faint); font: var(--text-xs) var(--font-data); }.insight-strip { display: grid; grid-template-columns: minmax(15rem, .7fr) 1.3fr; gap: var(--space-xl); margin: var(--space-md) 0; padding: var(--space-lg) 0; border-top: var(--rule-strong) solid var(--color-accent); border-bottom: var(--rule-thin) solid var(--color-rule); }.insight-strip span { display: block; color: var(--color-accent); font: var(--text-xs) var(--font-data); }.insight-strip strong { display: block; margin-top: var(--space-xs); font-size: var(--text-lg); }.insight-strip p { margin: 0; color: var(--color-ink-muted); }.comparison-table { margin-top: var(--space-md); }.panel-header p { margin: var(--space-2xs) 0 0; color: var(--color-ink-muted); font-size: var(--text-xs); }.company-link { display: grid; }.company-link:hover strong { color: var(--color-accent); }.company-link small, td > small { display: block; color: var(--color-ink-faint); font: var(--text-xs) var(--font-data); }td > small { margin-top: var(--space-2xs); }@media (max-width: 900px) { .company-options { grid-template-columns: repeat(2, minmax(0, 1fr)); } }@media (max-width: 560px) { .company-options, .insight-strip { grid-template-columns: 1fr; } .mode-group { width: 100%; overflow-x: auto; } }
+.analysis-section { margin-top: var(--space-xl); }
+.analysis-section > header { display: flex; align-items: baseline; justify-content: space-between; gap: var(--space-lg); margin-bottom: var(--space-sm); padding-bottom: var(--space-sm); border-bottom: var(--rule-thin) solid var(--color-rule); }
+.analysis-section > header h2 { margin: 0; font-size: var(--text-lg); }
+.analysis-section > header p { margin: 0; color: var(--color-ink-muted); font-size: var(--text-xs); }
+.diagnostic-grid { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: var(--space-md); }
+@media (max-width: 900px) { .diagnostic-grid { grid-template-columns: 1fr; } }
 </style>

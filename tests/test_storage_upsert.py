@@ -4,7 +4,7 @@ from datetime import datetime, timedelta
 import pytest
 
 from selenium_spyder import INCOME_ROW_LABELS
-from sqlserver_operation import insert_lrb
+from sqlserver_operation import insert_lrb, insert_xjllb
 
 
 def create_raw_income_table(database_path):
@@ -59,3 +59,21 @@ def test_income_row_labels_keep_operating_cost_separate():
     assert INCOME_ROW_LABELS["total_operating_cost"] == "营业总成本"
     assert INCOME_ROW_LABELS["operating_cost"] == "营业成本"
     assert INCOME_ROW_LABELS["total_operating_cost"] != INCOME_ROW_LABELS["operating_cost"]
+
+
+def test_insert_cash_flow_writes_standard_record_and_completes_batch(tmp_path, monkeypatch):
+    database_path = tmp_path / "cash.db"
+    monkeypatch.setenv("FINANCIAL_DB_PATH", str(database_path))
+    insert_xjllb([(
+        "600056", "中国医药", "12亿", "-3亿", "1亿", "20亿", "2亿", "8亿",
+        "2026-03-31", "cash-batch",
+    )])
+    with sqlite3.connect(database_path) as connection:
+        row = connection.execute(
+            "SELECT net_operating_cash_flow, capital_expenditure FROM cash_flow_statements"
+        ).fetchone()
+        batch = connection.execute(
+            "SELECT status, raw_row_count, normalized_row_count FROM import_batches WHERE batch_id='cash-batch'"
+        ).fetchone()
+    assert row == (1_200_000_000, 200_000_000)
+    assert batch == ("completed", 1, 1)
