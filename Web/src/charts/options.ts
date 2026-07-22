@@ -10,6 +10,7 @@ export interface ChartColors {
 
 interface BarRow { name: string; value: number | null }
 interface TrendRow { reportPeriod: string; revenue: number | null; netProfit: number | null }
+interface CashFlowTrendRow { reportPeriod: string; cashFlow: { netOperatingCashFlow?: number | null; netInvestingCashFlow?: number | null; netFinancingCashFlow?: number | null } | null }
 interface TooltipDatum { name?: string; seriesName?: string; value?: unknown; marker?: string }
 
 export function readChartColors(): ChartColors {
@@ -114,6 +115,48 @@ export function createTrendOption(records: TrendRow[], colors: ChartColors): ECh
   }
 }
 
+export function createCashFlowTrendOption(records: CashFlowTrendRow[], colors: ChartColors): EChartsOption {
+  const stableBarState = { emphasis: { disabled: true }, blur: { itemStyle: { opacity: 1 } } }
+  const definitions = [
+    ['netOperatingCashFlow', '经营活动现金流', colors.profit],
+    ['netInvestingCashFlow', '投资活动现金流', colors.accent],
+    ['netFinancingCashFlow', '筹资活动现金流', colors.muted],
+  ] as const
+  return {
+    animation: false,
+    tooltip: {
+      trigger: 'axis',
+      confine: true,
+      axisPointer: { type: 'shadow' },
+      formatter: (params: unknown) => {
+        const items = (Array.isArray(params) ? params : [params]).map(tooltipDatum)
+        return `${items[0]?.name ?? ''}<br>${items.map((item) => tooltipRow(item)).join('<br>')}`
+      },
+    },
+    legend: { data: definitions.map((item) => item[1]), textStyle: { color: colors.muted } },
+    grid: { left: 72, right: 28, top: 48, bottom: 44, containLabel: true },
+    xAxis: { type: 'category', data: records.map((row) => row.reportPeriod), axisLabel: { color: colors.muted, rotate: records.length > 8 ? 30 : 0 } },
+    yAxis: {
+      type: 'value',
+      axisLabel: { color: colors.muted, formatter: (value: number) => `${(value / 100000000).toFixed(0)}亿` },
+      splitLine: { lineStyle: { color: colors.rule } },
+    },
+    series: definitions.map(([key, name, color]) => ({
+      name,
+      type: 'bar',
+      itemStyle: { color },
+      data: records.map((row) => {
+        const value = row.cashFlow?.[key] ?? null
+        return key === 'netOperatingCashFlow'
+          ? { value, itemStyle: { color: value != null && value < 0 ? colors.loss : colors.profit } }
+          : { value, itemStyle: { color } }
+      }),
+      barMaxWidth: 20,
+      ...stableBarState,
+    })),
+  }
+}
+
 type PeerRow = {
   name: string
   profile: Record<string, number | null | undefined>
@@ -121,6 +164,8 @@ type PeerRow = {
 }
 
 const stableSeriesState = { emphasis: { disabled: true }, blur: { itemStyle: { opacity: 1 } } }
+// zrender 的 visualMap 插值暂不支持 OKLCH，使用与设计令牌对应的 RGB 色值。
+const heatmapColorScale = ['#2bb673', '#26373d', '#ff4d4f']
 
 export function createPeerHeatmapOption(rows: PeerRow[], colors: ChartColors): EChartsOption {
   const dimensions = [
@@ -142,7 +187,7 @@ export function createPeerHeatmapOption(rows: PeerRow[], colors: ChartColors): E
     grid: { left: 112, right: 28, top: 28, bottom: 48, containLabel: true },
     xAxis: { type: 'category', data: dimensions.map((item) => item[1]), axisLabel: { color: colors.muted } },
     yAxis: { type: 'category', data: rows.map((row) => row.name), axisLabel: { color: colors.muted } },
-    visualMap: { min: 0, max: 100, show: false, inRange: { color: [colors.loss, colors.rule, colors.profit] } },
+    visualMap: { min: 0, max: 100, show: false, inRange: { color: heatmapColorScale } },
     series: [{ type: 'heatmap', data, label: { show: true, formatter: (params: unknown) => {
       const item = tooltipDatum(params) as TooltipDatum & { data?: [number, number, number | null] }
       return item.data?.[2] == null ? '—' : `${Math.round(item.data[2])}`

@@ -32,13 +32,17 @@ export function calculateTtm(records, field) {
   return recent.reduce((sum, item) => sum + item.value, 0)
 }
 
-export function findLatestCommonPeriod(companyPeriods) {
-  if (!companyPeriods.length) return null
+export function findCommonPeriods(companyPeriods) {
+  if (!companyPeriods.length) return []
   const common = new Set(companyPeriods[0])
   for (const periods of companyPeriods.slice(1)) {
     for (const period of [...common]) if (!periods.includes(period)) common.delete(period)
   }
-  return [...common].sort().at(-1) ?? null
+  return [...common].sort((a, b) => b.localeCompare(a))
+}
+
+export function findLatestCommonPeriod(companyPeriods) {
+  return findCommonPeriods(companyPeriods)[0] ?? null
 }
 
 export function openingBalancePeriod(reportPeriod) {
@@ -107,7 +111,7 @@ export function calculatePeerMetrics(income = {}, balance = {}, previousBalance 
     cashShortDebtRatio: plainDivide(balance.monetaryFunds, balance.shortTermBorrowings),
     interestCoverage: plainDivide(income.totalProfit == null || income.interestExpenses == null ? null : income.totalProfit + income.interestExpenses, income.interestExpenses),
     cashProfitRatio,
-    cashRevenueRatio: safeDivide(cashFlow?.netOperatingCashFlow, income.revenue),
+    cashRevenueRatio: safeDivide(cashFlow?.cashReceivedFromSales, income.revenue),
     freeCashFlow: cashFlow?.netOperatingCashFlow == null || cashFlow?.capitalExpenditure == null ? null : cashFlow.netOperatingCashFlow - cashFlow.capitalExpenditure,
     receivableDays,
     inventoryDays,

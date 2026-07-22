@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { computed, onBeforeUnmount, onMounted, ref } from 'vue'
+import { computed, onBeforeUnmount, onMounted, ref, watch } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
 
 import { apiGet, ApiClientError } from '@/api/client'
@@ -24,6 +24,7 @@ const result = ref<CompareResponse | null>(null)
 const loading = ref(false)
 const error = ref<ApiClientError | null>(null)
 const mode = ref(String(route.query.mode ?? 'absolute'))
+const selectedPeriod = ref(String(route.query.period ?? ''))
 const selectedCodes = ref<string[]>(String(route.query.codes ?? '').split(',').filter(Boolean))
 let controller: AbortController | null = null
 
@@ -40,6 +41,11 @@ const chartRows = computed(() => comparisonRows.value.map((row) => ({ name: row.
 const marginRows = computed(() => comparisonRows.value.map((row) => ({ name: row.name, value: row.metrics.netMargin?.value ?? null })))
 const leadingCompany = computed(() => [...comparisonRows.value].filter((row) => row.metrics.revenue?.rawValue != null).sort((a, b) => (b.metrics.revenue.rawValue ?? 0) - (a.metrics.revenue.rawValue ?? 0))[0])
 
+function formatPeriod(period: string) {
+  const reportName = ({ '03-31': '一季报', '06-30': '中报', '09-30': '三季报', '12-31': '年报' } as Record<string, string>)[period.slice(5)] ?? '报告期'
+  return `${period.slice(0, 4)} ${reportName} · ${period}`
+}
+
 function toggleCompany(code: string) {
   if (selectedCodes.value.includes(code)) selectedCodes.value = selectedCodes.value.filter((item) => item !== code)
   else if (selectedCodes.value.length < 12) selectedCodes.value = [...selectedCodes.value, code]
@@ -52,8 +58,9 @@ async function loadComparison() {
   loading.value = true
   error.value = null
   try {
-    const query = buildCompareQuery(selectedCodes.value, mode.value, String(route.query.period ?? '') || null)
+    const query = buildCompareQuery(selectedCodes.value, mode.value, selectedPeriod.value || null)
     result.value = await apiGet<CompareResponse>(`/api/compare?${query}`, controller.signal)
+    selectedPeriod.value = result.value.commonPeriod
     const normalizedQuery = buildCompareQuery(selectedCodes.value, mode.value, result.value.commonPeriod)
     await router.replace(`/compare?${normalizedQuery}`)
     localStorage.setItem('financial-selected-companies', selectedCodes.value.join(','))
@@ -65,6 +72,14 @@ async function loadComparison() {
 }
 
 function setMode(nextMode: string) { mode.value = nextMode; void loadComparison() }
+
+watch(() => route.query.period, (period) => {
+  const nextPeriod = String(period ?? '')
+  if (nextPeriod && nextPeriod !== selectedPeriod.value) {
+    selectedPeriod.value = nextPeriod
+    void loadComparison()
+  }
+})
 
 onMounted(() => {
   if (selectedCodes.value.length < 2) {
@@ -88,7 +103,13 @@ onBeforeUnmount(() => controller?.abort())
         <div class="mode-group" role="group" aria-label="比较模式">
           <button v-for="item in [{k:'absolute',l:'绝对值'}, {k:'index',l:'中位数指数'}, {k:'percentile',l:'分位排名'}]" :key="item.k" class="button" type="button" :aria-pressed="mode === item.k" @click="setMode(item.k)">{{ item.l }}</button>
         </div>
-        <button class="button primary" type="button" :disabled="selectedCodes.length < 2" @click="loadComparison">更新分析</button>
+        <div class="field period-field">
+          <!-- <label for="compare-period">报告期</label> -->
+          <select id="compare-period" v-model="selectedPeriod" data-testid="compare-period" :disabled="loading || (result?.availablePeriods.length ?? 0) <= 1" @change="loadComparison">
+            <option v-for="period in result?.availablePeriods ?? []" :key="period" :value="period">{{ formatPeriod(period) }}</option>
+          </select>
+        </div>
+        <button class="button primary" type="button" :disabled="loading || selectedCodes.length < 2" @click="loadComparison">更新分析</button>
         <span class="terminal-meta">最多 12 家 · 当前 {{ selectedCodes.length }} 家</span>
       </div>
       <details class="company-selector">
@@ -125,7 +146,7 @@ onBeforeUnmount(() => controller?.abort())
 </template>
 
 <style scoped>
-.filter-panel { margin-bottom: var(--space-md); }.mode-group { display: flex; gap: var(--space-2xs); }.company-selector { border-top: var(--rule-thin) solid var(--color-rule); }.company-selector summary { padding: var(--space-sm) var(--space-md); color: var(--color-accent); cursor: pointer; font-size: var(--text-sm); }.company-options { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: var(--space-2xs); padding: 0 var(--space-md) var(--space-md); }.company-options label { display: grid; grid-template-columns: auto 1fr; gap: 0 var(--space-xs); padding: var(--space-xs); border: var(--rule-thin) solid var(--color-rule); color: var(--color-ink-muted); cursor: pointer; }.company-options label.selected { border-color: var(--color-accent); background: var(--color-accent-wash); color: var(--color-ink); }.company-options small { grid-column: 2; color: var(--color-ink-faint); font: var(--text-xs) var(--font-data); }.insight-strip { display: grid; grid-template-columns: minmax(15rem, .7fr) 1.3fr; gap: var(--space-xl); margin: var(--space-md) 0; padding: var(--space-lg) 0; border-top: var(--rule-strong) solid var(--color-accent); border-bottom: var(--rule-thin) solid var(--color-rule); }.insight-strip span { display: block; color: var(--color-accent); font: var(--text-xs) var(--font-data); }.insight-strip strong { display: block; margin-top: var(--space-xs); font-size: var(--text-lg); }.insight-strip p { margin: 0; color: var(--color-ink-muted); }.comparison-table { margin-top: var(--space-md); }.panel-header p { margin: var(--space-2xs) 0 0; color: var(--color-ink-muted); font-size: var(--text-xs); }.company-link { display: grid; }.company-link:hover strong { color: var(--color-accent); }.company-link small, td > small { display: block; color: var(--color-ink-faint); font: var(--text-xs) var(--font-data); }td > small { margin-top: var(--space-2xs); }@media (max-width: 900px) { .company-options { grid-template-columns: repeat(2, minmax(0, 1fr)); } }@media (max-width: 560px) { .company-options, .insight-strip { grid-template-columns: 1fr; } .mode-group { width: 100%; overflow-x: auto; } }
+.filter-panel { margin-bottom: var(--space-md); }.mode-group { display: flex; gap: var(--space-2xs); }.period-field { min-width: 14rem; }.period-field select { font-family: var(--font-data); }.company-selector { border-top: var(--rule-thin) solid var(--color-rule); }.company-selector summary { padding: var(--space-sm) var(--space-md); color: var(--color-accent); cursor: pointer; font-size: var(--text-sm); }.company-options { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: var(--space-2xs); padding: 0 var(--space-md) var(--space-md); }.company-options label { display: grid; grid-template-columns: auto 1fr; gap: 0 var(--space-xs); padding: var(--space-xs); border: var(--rule-thin) solid var(--color-rule); color: var(--color-ink-muted); cursor: pointer; }.company-options label.selected { border-color: var(--color-accent); background: var(--color-accent-wash); color: var(--color-ink); }.company-options small { grid-column: 2; color: var(--color-ink-faint); font: var(--text-xs) var(--font-data); }.insight-strip { display: grid; grid-template-columns: minmax(15rem, .7fr) 1.3fr; gap: var(--space-xl); margin: var(--space-md) 0; padding: var(--space-lg) 0; border-top: var(--rule-strong) solid var(--color-accent); border-bottom: var(--rule-thin) solid var(--color-rule); }.insight-strip span { display: block; color: var(--color-accent); font: var(--text-xs) var(--font-data); }.insight-strip strong { display: block; margin-top: var(--space-xs); font-size: var(--text-lg); }.insight-strip p { margin: 0; color: var(--color-ink-muted); }.comparison-table { margin-top: var(--space-md); }.panel-header p { margin: var(--space-2xs) 0 0; color: var(--color-ink-muted); font-size: var(--text-xs); }.company-link { display: grid; }.company-link:hover strong { color: var(--color-accent); }.company-link small, td > small { display: block; color: var(--color-ink-faint); font: var(--text-xs) var(--font-data); }td > small { margin-top: var(--space-2xs); }@media (max-width: 900px) { .company-options { grid-template-columns: repeat(2, minmax(0, 1fr)); } }@media (max-width: 560px) { .company-options, .insight-strip { grid-template-columns: 1fr; } .mode-group, .period-field { width: 100%; overflow-x: auto; } }
 .analysis-section { margin-top: var(--space-xl); }
 .analysis-section > header { display: flex; align-items: baseline; justify-content: space-between; gap: var(--space-lg); margin-bottom: var(--space-sm); padding-bottom: var(--space-sm); border-bottom: var(--rule-thin) solid var(--color-rule); }
 .analysis-section > header h2 { margin: 0; font-size: var(--text-lg); }

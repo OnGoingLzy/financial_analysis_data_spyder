@@ -4,7 +4,7 @@ import { fileURLToPath } from 'node:url'
 import { DatabaseSync } from 'node:sqlite'
 
 import { ApiError } from './errors.mjs'
-import { calculatePeerMetrics, calculateRatios, findLatestCommonPeriod, median, openingBalancePeriod, percentileRank } from './metrics.mjs'
+import { calculatePeerMetrics, calculateRatios, findCommonPeriods, median, openingBalancePeriod, percentileRank } from './metrics.mjs'
 
 export const DEFAULT_DATABASE_PATH = import.meta.url.startsWith('file:')
   ? resolve(dirname(fileURLToPath(import.meta.url)), '..', '..', 'financial_analysis.db')
@@ -167,7 +167,10 @@ export function getCompanyAnalysis(db, code) {
 
 export function getComparison(db, codes, requestedPeriod, mode = 'absolute') {
   const periodsByCompany = codes.map((code) => all(db, 'SELECT report_period reportPeriod FROM income_statements WHERE code=:code', { code }).map((row) => row.reportPeriod))
-  const commonPeriod = requestedPeriod || findLatestCommonPeriod(periodsByCompany)
+  const availablePeriods = findCommonPeriods(periodsByCompany)
+  const commonPeriod = requestedPeriod && availablePeriods.includes(requestedPeriod)
+    ? requestedPeriod
+    : availablePeriods[0] ?? null
   if (!commonPeriod) throw new ApiError('NO_COMMON_PERIOD', '所选公司没有共同报告期', 422, false, 'comparison')
   const rows = codes.map((code) => {
     const company = one(db, 'SELECT code, name FROM companies WHERE code=:code', { code })
@@ -192,7 +195,7 @@ export function getComparison(db, codes, requestedPeriod, mode = 'absolute') {
       return [name, { value: displayValue, rawValue: value, percentile: percentileRank(value, rows.map((item) => item.metrics?.[name] ?? null)) }]
     })),
   }))
-  return { commonPeriod, mode, sampleSize: rows.length, medians, rows: normalizedRows }
+  return { availablePeriods, commonPeriod, mode, sampleSize: rows.length, medians, rows: normalizedRows }
 }
 
 export function getDataQuality(db) {

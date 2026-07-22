@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest'
 
-import { createBarOption, createCashRiskOption, createGrowthProfitOption, createIncomeStructureOption, createPeerHeatmapOption, createTrendOption, createWorkingCapitalOption } from './options'
+import { createBarOption, createCashFlowTrendOption, createCashRiskOption, createGrowthProfitOption, createIncomeStructureOption, createPeerHeatmapOption, createTrendOption, createWorkingCapitalOption } from './options'
 
 const colors = {
   accent: '#28d7e5',
@@ -44,6 +44,20 @@ describe('财务图表交互配置', () => {
     ))).toBe(true)
     expect(option.tooltip).toMatchObject({ trigger: 'axis' })
   })
+
+  it('现金流图展示三类现金流并在悬停时保持柱体可见', () => {
+    const option = createCashFlowTrendOption([{
+      reportPeriod: '2025-12-31',
+      cashFlow: { netOperatingCashFlow: 100, netInvestingCashFlow: -30, netFinancingCashFlow: 10 },
+    }], colors)
+    const series = option.series as Array<{ name: string; data: unknown[]; itemStyle?: { color?: string }; emphasis?: { disabled?: boolean } }>
+    const formatter = (option.tooltip as { formatter: (params: unknown) => string }).formatter
+
+    expect(series.map((item) => item.name)).toEqual(['经营活动现金流', '投资活动现金流', '筹资活动现金流'])
+    expect(series.map((item) => item.itemStyle?.color)).toEqual([colors.profit, colors.accent, colors.muted])
+    expect(series.every((item) => item.emphasis?.disabled === true)).toBe(true)
+    expect(formatter([{ name: '2025-12-31', seriesName: '经营活动现金流', value: 100, marker: '●' }])).toContain('100 元')
+  })
 })
 
 describe('同行诊断图表配置', () => {
@@ -59,5 +73,16 @@ describe('同行诊断图表配置', () => {
     expect(createIncomeStructureOption(rows, colors).series).toHaveLength(6)
     expect(createWorkingCapitalOption(rows, colors).series).toHaveLength(4)
     expect(createCashRiskOption(rows, colors).series).toBeTruthy()
+  })
+
+  it('热力图色阶不向 visualMap 传入无法插值的 OKLCH 颜色', () => {
+    const option = createPeerHeatmapOption(rows, {
+      ...colors,
+      profit: 'oklch(68% 0.2 28)',
+      loss: 'oklch(72% 0.15 151)',
+      rule: 'oklch(35% 0.022 228)',
+    })
+    const visualMap = option.visualMap as { inRange: { color: string[] } }
+    expect(visualMap.inRange.color).toEqual(['#2bb673', '#26373d', '#ff4d4f'])
   })
 })
